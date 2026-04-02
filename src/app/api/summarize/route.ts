@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import { summarizeAndTag, generateEmbedding } from "@/lib/gemini";
+import { summarizeAndTag } from "@/lib/gemini";
+import { trackUsage, estimateTokens } from "@/lib/usage-tracker";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,12 +11,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 1: Gemini Flash for summary, title, tags, category
-    const analysis = await summarizeAndTag(text);
+    let analysis;
+    try {
+      analysis = await summarizeAndTag(text);
+    } catch (err) {
+      console.error("Gemini summarize error:", err);
+      return Response.json(
+        { error: `AI要約エラー: ${err instanceof Error ? err.message : String(err)}` },
+        { status: 500 }
+      );
+    }
 
-    // Step 2: Generate embedding
-    const embedding = await generateEmbedding(text);
+    // Track Gemini usage
+    const inputTokens = estimateTokens(text) + 100; // text + prompt overhead
+    const outputTokens = estimateTokens(JSON.stringify(analysis));
+    await trackUsage({
+      apiName: "Gemini",
+      model: "gemini-2.5-flash",
+      inputTokens,
+      outputTokens,
+      endpoint: "summarize",
+    });
 
-    // Step 3: Save to Supabase
+    // Step 2: Save to Supabase
     const supabase = createServerClient();
     const { data, error } = await supabase
       .from("memos")
@@ -25,14 +43,16 @@ export async function POST(request: NextRequest) {
         summary: analysis.summary,
         tags: analysis.tags,
         category: analysis.category,
-        embedding: JSON.stringify(embedding),
       })
       .select()
       .single();
 
     if (error) {
       console.error("Supabase insert error:", error);
-      return Response.json({ error: "Failed to save memo" }, { status: 500 });
+      return Response.json(
+        { error: `DB保存エラー: ${error.message}` },
+        { status: 500 }
+      );
     }
 
     return Response.json({
@@ -44,6 +64,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Summarize error:", error);
-    return Response.json({ error: "Internal error" }, { status: 500 });
+    return Response.json(
+      { error: `エラー: ${error instanceof Error ? error.message : String(error)}` },
+      { status: 500 }
+    );
   }
 }

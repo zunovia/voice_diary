@@ -50,7 +50,12 @@ export default function StorageIndicator({ compact = false }: { compact?: boolea
           style={{ width: `${Math.min(percent, 100)}%` }}
         />
       </div>
-      <p className="text-xs text-gray-500 mt-1">{percent.toFixed(1)}% 使用中</p>
+      <div className="flex justify-between items-center mt-1">
+        <p className="text-xs text-gray-500">{percent.toFixed(1)}% 使用中</p>
+        <a href="/usage" className="text-xs text-indigo-400 hover:text-indigo-300">
+          API使用量 &rarr;
+        </a>
+      </div>
     </div>
   );
 }

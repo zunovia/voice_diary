@@ -10,7 +10,7 @@ export async function summarizeAndTag(rawText: string): Promise<{
   tags: string[];
   category: string;
 }> {
-  const model = getGenAI().getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = getGenAI().getGenerativeModel({ model: "gemini-2.5-flash" });
 
   const prompt = `あなたは日記メモの分析アシスタントです。以下の音声メモのテキストを分析してください。
 

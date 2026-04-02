@@ -4,9 +4,15 @@ import { useState, useRef, useCallback } from "react";
 
 type RecorderState = "idle" | "recording" | "processing" | "done";
 
+// Extend Window for SpeechRecognition
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+}
+
 export default function VoiceRecorder() {
   const [state, setState] = useState<RecorderState>("idle");
   const [transcription, setTranscription] = useState("");
+  const [liveText, setLiveText] = useState("");
   const [summary, setSummary] = useState<{
     title: string;
     summary: string;
@@ -15,65 +21,75 @@ export default function VoiceRecorder() {
   } | null>(null);
   const [error, setError] = useState("");
   const [duration, setDuration] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const recognitionRef = useRef<ReturnType<typeof createSpeechRecognition> | null>(null);
+  const fullTextRef = useRef("");
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  function createSpeechRecognition() {
+    const SpeechRecognition =
+      (window as unknown as Record<string, unknown>).SpeechRecognition ||
+      (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
+    if (!SpeechRecognition) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognition = new (SpeechRecognition as any)();
+    recognition.lang = "ja-JP";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    return recognition;
+  }
 
   const startRecording = useCallback(async () => {
     try {
       setError("");
       setTranscription("");
+      setLiveText("");
       setSummary(null);
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : "audio/webm",
-      });
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
+      fullTextRef.current = "";
       setDuration(0);
 
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+      const recognition = createSpeechRecognition();
+      if (!recognition) {
+        setError("お使いのブラウザは音声認識に対応していません。Chrome を使用してください。");
+        return;
+      }
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interim = "";
+        let final = "";
+        for (let i = 0; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            final += result[0].transcript;
+          } else {
+            interim += result[0].transcript;
+          }
+        }
+        if (final) {
+          fullTextRef.current = final;
+        }
+        setLiveText(fullTextRef.current + interim);
       };
 
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        if (timerRef.current) clearInterval(timerRef.current);
-
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        setState("processing");
-
-        try {
-          // Step 1: Transcribe
-          const formData = new FormData();
-          formData.append("audio", blob, "recording.webm");
-          const transcribeRes = await fetch("/api/transcribe", {
-            method: "POST",
-            body: formData,
-          });
-          if (!transcribeRes.ok) throw new Error("文字起こしに失敗しました");
-          const { text } = await transcribeRes.json();
-          setTranscription(text);
-
-          // Step 2: Summarize & Save
-          const summarizeRes = await fetch("/api/summarize", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
-          });
-          if (!summarizeRes.ok) throw new Error("要約・保存に失敗しました");
-          const result = await summarizeRes.json();
-          setSummary(result);
-          setState("done");
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "エラーが発生しました");
-          setState("idle");
+      recognition.onerror = (event: Event & { error?: string }) => {
+        console.error("Speech recognition error:", event.error);
+        if (event.error !== "no-speech") {
+          setError(`音声認識エラー: ${event.error}`);
         }
       };
 
-      mediaRecorder.start(1000);
+      recognition.onend = () => {
+        // Auto-restart if still in recording state
+        if (recognitionRef.current && state === "recording") {
+          try {
+            recognition.start();
+          } catch {
+            // ignore
+          }
+        }
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
       setState("recording");
 
       timerRef.current = setInterval(() => {
@@ -82,13 +98,47 @@ export default function VoiceRecorder() {
     } catch {
       setError("マイクへのアクセスが許可されませんでした");
     }
-  }, []);
+  }, [state]);
 
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
+  const stopRecording = useCallback(async () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.onend = null;
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
     }
-  }, []);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    const text = fullTextRef.current || liveText;
+    setTranscription(text);
+
+    if (!text.trim()) {
+      setError("音声が検出されませんでした。もう一度お試しください。");
+      setState("idle");
+      return;
+    }
+
+    setState("processing");
+
+    try {
+      // Summarize & Save (only 1 API call to Gemini)
+      const summarizeRes = await fetch("/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const summarizeData = await summarizeRes.json();
+      if (!summarizeRes.ok)
+        throw new Error(summarizeData.error || "要約・保存に失敗しました");
+      setSummary(summarizeData);
+      setState("done");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      setState("idle");
+    }
+  }, [liveText]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -146,6 +196,14 @@ export default function VoiceRecorder() {
       {/* Duration */}
       {state === "recording" && (
         <div className="text-3xl font-mono text-red-400">{formatTime(duration)}</div>
+      )}
+
+      {/* Live transcription preview */}
+      {state === "recording" && liveText && (
+        <div className="bg-gray-800/50 rounded-lg p-3 w-full max-w-md border border-gray-700/50">
+          <p className="text-xs text-gray-500 mb-1">リアルタイム文字起こし</p>
+          <p className="text-sm text-gray-300">{liveText}</p>
+        </div>
       )}
 
       {/* Status text */}

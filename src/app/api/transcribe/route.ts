@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,50 +9,69 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: "No audio file" }, { status: 400 });
     }
 
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return Response.json({ error: "GEMINI_API_KEY not set" }, { status: 500 });
+    }
+
     const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
     const base64Audio = audioBuffer.toString("base64");
 
-    // Google Cloud Speech-to-Text API
-    const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
+    console.log("Transcribe: audio size =", audioBuffer.length, "bytes, type =", audioFile.type);
+
+    // Use Gemini REST API directly for audio (more reliable for file uploads)
     const response = await fetch(
-      `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          config: {
-            encoding: "WEBM_OPUS",
-            sampleRateHertz: 48000,
-            languageCode: "ja-JP",
-            enableAutomaticPunctuation: true,
-            model: "latest_long",
-          },
-          audio: { content: base64Audio },
+          contents: [
+            {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: audioFile.type || "audio/webm;codecs=opus",
+                    data: base64Audio,
+                  },
+                },
+                {
+                  text: "この音声を正確に日本語でテキストに書き起こしてください。音声の内容のみを出力し、それ以外の説明や注釈は一切付けないでください。",
+                },
+              ],
+            },
+          ],
         }),
       }
     );
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error("Google STT error:", error);
+      const errorText = await response.text();
+      console.error("Gemini API error:", response.status, errorText);
       return Response.json(
-        { error: "Transcription failed" },
+        { error: `Gemini API error: ${response.status}` },
         { status: 500 }
       );
     }
 
     const data = await response.json();
     const text =
-      data.results
-        ?.map(
-          (r: { alternatives?: Array<{ transcript: string }> }) =>
-            r.alternatives?.[0]?.transcript
-        )
-        .join("") || "";
+      data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+
+    if (!text) {
+      console.error("Gemini returned empty text:", JSON.stringify(data));
+      return Response.json(
+        { error: "音声を認識できませんでした" },
+        { status: 400 }
+      );
+    }
 
     return Response.json({ text });
   } catch (error) {
     console.error("Transcribe error:", error);
-    return Response.json({ error: "Internal error" }, { status: 500 });
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Internal error" },
+      { status: 500 }
+    );
   }
 }
