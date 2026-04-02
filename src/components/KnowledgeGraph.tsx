@@ -635,7 +635,7 @@ export default function KnowledgeGraph() {
                 <span>テキスト表示閾値</span>
                 <span>{textFadeThreshold.toFixed(2)}</span>
               </div>
-              <Slider value={[textFadeThreshold]} onValueChange={([v]) => setTextFadeThreshold(v)} min={0.1} max={3} step={0.1} />
+              <Slider value={[textFadeThreshold]} onValueChange={(v) => setTextFadeThreshold(Array.isArray(v) ? v[0] : v)} min={0.1} max={3} step={0.1} />
             </div>
 
             <div className="space-y-1">
@@ -643,7 +643,7 @@ export default function KnowledgeGraph() {
                 <span>ノードサイズ</span>
                 <span>{nodeSize}</span>
               </div>
-              <Slider value={[nodeSize]} onValueChange={([v]) => setNodeSize(v)} min={1} max={15} step={0.5} />
+              <Slider value={[nodeSize]} onValueChange={(v) => setNodeSize(Array.isArray(v) ? v[0] : v)} min={1} max={15} step={0.5} />
             </div>
 
             <div className="space-y-1">
@@ -651,7 +651,7 @@ export default function KnowledgeGraph() {
                 <span>リンクの太さ</span>
                 <span>{linkThickness}</span>
               </div>
-              <Slider value={[linkThickness]} onValueChange={([v]) => setLinkThickness(v)} min={0.2} max={5} step={0.2} />
+              <Slider value={[linkThickness]} onValueChange={(v) => setLinkThickness(Array.isArray(v) ? v[0] : v)} min={0.2} max={5} step={0.2} />
             </div>
           </div>
 
@@ -666,7 +666,7 @@ export default function KnowledgeGraph() {
                 <span>中心引力</span>
                 <span>{centerStrength.toFixed(2)}</span>
               </div>
-              <Slider value={[centerStrength]} onValueChange={([v]) => setCenterStrength(v)} min={0} max={1} step={0.02} />
+              <Slider value={[centerStrength]} onValueChange={(v) => setCenterStrength(Array.isArray(v) ? v[0] : v)} min={0} max={1} step={0.02} />
             </div>
 
             <div className="space-y-1">
@@ -674,7 +674,7 @@ export default function KnowledgeGraph() {
                 <span>反発力</span>
                 <span>{repelStrength.toFixed(1)}</span>
               </div>
-              <Slider value={[repelStrength]} onValueChange={([v]) => setRepelStrength(v)} min={0} max={50} step={0.5} />
+              <Slider value={[repelStrength]} onValueChange={(v) => setRepelStrength(Array.isArray(v) ? v[0] : v)} min={0} max={50} step={0.5} />
             </div>
 
             <div className="space-y-1">
@@ -682,7 +682,7 @@ export default function KnowledgeGraph() {
                 <span>リンク引力</span>
                 <span>{linkStrength.toFixed(2)}</span>
               </div>
-              <Slider value={[linkStrength]} onValueChange={([v]) => setLinkStrength(v)} min={0} max={1} step={0.02} />
+              <Slider value={[linkStrength]} onValueChange={(v) => setLinkStrength(Array.isArray(v) ? v[0] : v)} min={0} max={1} step={0.02} />
             </div>
 
             <div className="space-y-1">
@@ -690,7 +690,7 @@ export default function KnowledgeGraph() {
                 <span>リンク距離</span>
                 <span>{linkDistance}</span>
               </div>
-              <Slider value={[linkDistance]} onValueChange={([v]) => setLinkDistance(v)} min={10} max={500} step={5} />
+              <Slider value={[linkDistance]} onValueChange={(v) => setLinkDistance(Array.isArray(v) ? v[0] : v)} min={10} max={500} step={5} />
             </div>
           </div>
 
