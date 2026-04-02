@@ -128,7 +128,6 @@ export default function ForcedConnectionViz({ data }: { data: ForcedData }) {
             } ${pulsingIndex === i ? "ring-2 ring-offset-2 ring-offset-background" : ""}`}
             style={{
               borderColor: i < visibleCount ? `${color}40` : "transparent",
-              ringColor: pulsingIndex === i ? color : undefined,
             }}
           >
             {/* Connection visualization */}

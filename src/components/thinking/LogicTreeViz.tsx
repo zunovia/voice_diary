@@ -60,7 +60,7 @@ export default function LogicTreeViz({ data }: { data: LogicTreeData }) {
                 style={{
                   borderColor: `${color}40`,
                   backgroundColor: `${color}10`,
-                  ringColor: isExpanded ? color : undefined,
+                  boxShadow: isExpanded ? `0 0 0 2px ${color}` : undefined,
                 }}
               >
                 <span className="text-xs font-medium" style={{ color }}>

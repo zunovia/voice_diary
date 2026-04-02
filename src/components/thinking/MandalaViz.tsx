@@ -143,7 +143,7 @@ function ThemeCell({
       style={{
         borderColor: `${color}40`,
         backgroundColor: `${color}10`,
-        ringColor: active ? color : undefined,
+        boxShadow: active ? `0 0 0 2px ${color}` : undefined,
       }}
     >
       <span className="text-[11px] font-medium text-center px-1" style={{ color }}>

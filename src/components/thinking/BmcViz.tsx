@@ -53,7 +53,7 @@ export default function BmcViz({ data }: { data: BmcData }) {
         }}
       >
         {BMC_BLOCKS.map((block, i) => {
-          const items = (data as Record<string, string[]>)[block.key] || [];
+          const items = (data as unknown as Record<string, string[]>)[block.key] || [];
           return (
             <div
               key={block.key}
