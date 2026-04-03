@@ -30,9 +30,25 @@ type GraphLink = {
   similarity: number;
 };
 
+type InsightLink = {
+  id: string;
+  source: string;
+  target: string;
+  insight: string;
+  domain: string;
+  created_at: string;
+};
+
 type ColorGroup = {
   query: string;
   color: string;
+};
+
+const DOMAIN_COLORS: Record<string, string> = {
+  ビジネス: "#3b82f6",
+  技術: "#22c55e",
+  思想: "#a855f7",
+  アクション: "#f97316",
 };
 
 // --- Constants ---
@@ -69,8 +85,13 @@ export default function KnowledgeGraph() {
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
 
   // Data
-  const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({ nodes: [], links: [] });
+  const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; links: GraphLink[]; insightLinks: InsightLink[] }>({ nodes: [], links: [], insightLinks: [] });
   const [loading, setLoading] = useState(true);
+
+  // Insight display
+  const [showInsights, setShowInsights] = useState(true);
+  const [insightAnimating, setInsightAnimating] = useState(false);
+  const [hoveredInsight, setHoveredInsight] = useState<InsightLink | null>(null);
 
   // Selected node detail
   const [selectedMemo, setSelectedMemo] = useState<GraphNode | null>(null);
@@ -110,10 +131,18 @@ export default function KnowledgeGraph() {
   const animationRef = useRef<NodeJS.Timeout | null>(null);
 
   // --- Data fetching ---
+  const prevInsightCountRef = useRef(0);
   useEffect(() => {
     fetch("/api/memos/similar")
       .then((r) => r.json())
       .then((data) => {
+        const newInsightCount = data.insightLinks?.length || 0;
+        // Trigger discovery animation if new insights appeared
+        if (prevInsightCountRef.current > 0 && newInsightCount > prevInsightCountRef.current) {
+          setInsightAnimating(true);
+          setTimeout(() => setInsightAnimating(false), 3000);
+        }
+        prevInsightCountRef.current = newInsightCount;
         setGraphData(data);
         setLoading(false);
       })
@@ -388,6 +417,67 @@ export default function KnowledgeGraph() {
         .attr("class", "node-label");
     }
 
+    // === INSIGHT LINKS (glowing connections) ===
+    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const visibleInsightLinks = showInsights
+      ? graphData.insightLinks.filter(
+          (il) => nodeMap.has(il.source) && nodeMap.has(il.target)
+        )
+      : [];
+
+    // SVG gradient definitions for insight links
+    const defs = svg.select("defs").empty() ? svg.append("defs") : svg.select("defs");
+
+    // Glow filter
+    const filter = defs.append("filter").attr("id", "glow");
+    filter.append("feGaussianBlur").attr("stdDeviation", "3").attr("result", "coloredBlur");
+    const feMerge = filter.append("feMerge");
+    feMerge.append("feMergeNode").attr("in", "coloredBlur");
+    feMerge.append("feMergeNode").attr("in", "SourceGraphic");
+
+    // Animated dash pattern
+    const insightLinkGroup = g.append("g").attr("class", "insight-links");
+
+    const insightLine = insightLinkGroup
+      .selectAll("line")
+      .data(visibleInsightLinks)
+      .join("line")
+      .attr("stroke", (d) => DOMAIN_COLORS[d.domain] || "#a855f7")
+      .attr("stroke-width", 2.5)
+      .attr("stroke-dasharray", "8,4")
+      .attr("filter", "url(#glow)")
+      .attr("cursor", "pointer")
+      .on("mouseenter", (_, d) => setHoveredInsight(d))
+      .on("mouseleave", () => setHoveredInsight(null));
+
+    // Discovery animation: lines appear with electric effect
+    if (insightAnimating) {
+      insightLine
+        .attr("stroke-opacity", 0)
+        .transition()
+        .delay((_, i) => i * 400)
+        .duration(800)
+        .attr("stroke-opacity", 0.9)
+        .on("start", function () {
+          d3.select(this)
+            .attr("stroke-width", 5)
+            .transition()
+            .duration(400)
+            .attr("stroke-width", 2.5);
+        });
+    } else {
+      insightLine.attr("stroke-opacity", 0.7);
+    }
+
+    // Animate dash offset for flowing effect
+    let dashOffset = 0;
+    const animateDash = () => {
+      dashOffset -= 0.5;
+      insightLine.attr("stroke-dashoffset", dashOffset);
+      requestAnimationFrame(animateDash);
+    };
+    const dashAnimFrame = requestAnimationFrame(animateDash);
+
     // Tick
     simulation.on("tick", () => {
       link
@@ -401,16 +491,26 @@ export default function KnowledgeGraph() {
       g.selectAll<SVGTextElement, GraphNode>(".node-label")
         .attr("x", (d) => d.x || 0)
         .attr("y", (d) => d.y || 0);
+
+      // Update insight links positions
+      insightLine
+        .attr("x1", (d) => nodeMap.get(d.source)?.x || 0)
+        .attr("y1", (d) => nodeMap.get(d.source)?.y || 0)
+        .attr("x2", (d) => nodeMap.get(d.target)?.x || 0)
+        .attr("y2", (d) => nodeMap.get(d.target)?.y || 0);
     });
 
     return () => {
       simulation.stop();
+      cancelAnimationFrame(dashAnimFrame);
     };
   }, [
     filteredData,
     loading,
     showArrows,
     showTags,
+    showInsights,
+    insightAnimating,
     textFadeThreshold,
     nodeSize,
     linkThickness,
@@ -419,6 +519,7 @@ export default function KnowledgeGraph() {
     linkStrength,
     linkDistance,
     getNodeColor,
+    graphData.insightLinks,
   ]);
 
   // --- Animation (time-lapse) ---
@@ -431,7 +532,7 @@ export default function KnowledgeGraph() {
     );
 
     let i = 0;
-    setGraphData({ nodes: [], links: [] });
+    setGraphData({ nodes: [], links: [], insightLinks: [] });
 
     animationRef.current = setInterval(() => {
       if (i >= sorted.length) {
@@ -451,6 +552,9 @@ export default function KnowledgeGraph() {
           const t = typeof l.target === "string" ? l.target : l.target.id;
           return visibleIds.has(s) && visibleIds.has(t);
         }),
+        insightLinks: prev.insightLinks.filter(
+          (il) => visibleIds.has(il.source) && visibleIds.has(il.target)
+        ),
       }));
       i++;
     }, 800);
@@ -582,9 +686,13 @@ export default function KnowledgeGraph() {
         {/* Bottom-left: stats */}
         <div className="absolute bottom-3 left-3 text-[10px] text-muted-foreground bg-card/80 backdrop-blur rounded px-2 py-1">
           {filteredData().nodes.length} ノード / {filteredData().links.length} 接続
+          {graphData.insightLinks.length > 0 && (
+            <span className="text-violet-400"> / {graphData.insightLinks.length} インサイト</span>
+          )}
         </div>
 
         {/* Hovered node tooltip */}
+        {/* Node tooltip */}
         {hoveredNode && (
           <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur border border-border rounded-lg px-3 py-2 pointer-events-none max-w-xs">
             <p className="text-xs font-medium">
@@ -592,6 +700,33 @@ export default function KnowledgeGraph() {
             </p>
             <p className="text-[10px] text-muted-foreground line-clamp-2">
               {graphData.nodes.find((n) => n.id === hoveredNode)?.summary}
+            </p>
+          </div>
+        )}
+
+        {/* Insight link tooltip */}
+        {hoveredInsight && (
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-card/95 backdrop-blur border rounded-lg px-4 py-3 pointer-events-none max-w-sm shadow-lg"
+            style={{ borderColor: `${DOMAIN_COLORS[hoveredInsight.domain] || "#a855f7"}60` }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: DOMAIN_COLORS[hoveredInsight.domain] || "#a855f7" }} />
+              <span className="text-[10px] font-medium" style={{ color: DOMAIN_COLORS[hoveredInsight.domain] || "#a855f7" }}>
+                {hoveredInsight.domain} インサイト
+              </span>
+            </div>
+            <p className="text-xs">{hoveredInsight.insight}</p>
+          </div>
+        )}
+
+        {/* Insight discovery banner */}
+        {insightAnimating && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-violet-500/20 backdrop-blur border border-violet-500/40 rounded-lg px-4 py-2 animate-pulse">
+            <p className="text-xs text-violet-300 font-medium flex items-center gap-2">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              新しいインサイト接続を発見しました
             </p>
           </div>
         )}
@@ -617,6 +752,13 @@ export default function KnowledgeGraph() {
             <label className="flex items-center justify-between text-xs">
               <span>孤立ノード</span>
               <input type="checkbox" checked={showOrphans} onChange={(e) => setShowOrphans(e.target.checked)} className="accent-primary" />
+            </label>
+            <label className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1">
+                インサイト接続
+                <span className="text-[9px] text-violet-400">({graphData.insightLinks.length})</span>
+              </span>
+              <input type="checkbox" checked={showInsights} onChange={(e) => setShowInsights(e.target.checked)} className="accent-violet-500" />
             </label>
           </div>
 

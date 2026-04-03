@@ -16,7 +16,7 @@ export async function GET() {
     }
 
     if (!memos || memos.length === 0) {
-      return Response.json({ nodes: [], links: [] });
+      return Response.json({ nodes: [], links: [], insightLinks: [] });
     }
 
     // Build nodes
@@ -54,7 +54,43 @@ export async function GET() {
       }
     }
 
-    return Response.json({ nodes, links });
+    // Get insights and build insight links
+    const { data: insights } = await supabase
+      .from("insights")
+      .select("id, memo_ids, insight, domain, created_at")
+      .order("created_at", { ascending: false });
+
+    const memoIdSet = new Set(memos.map((m) => m.id));
+    const insightLinks: Array<{
+      id: string;
+      source: string;
+      target: string;
+      insight: string;
+      domain: string;
+      created_at: string;
+    }> = [];
+
+    if (insights) {
+      for (const ins of insights) {
+        if (!ins.memo_ids || ins.memo_ids.length < 2) continue;
+        // Create links between all pairs of memos referenced by this insight
+        const validIds = ins.memo_ids.filter((id: string) => memoIdSet.has(id));
+        for (let i = 0; i < validIds.length; i++) {
+          for (let j = i + 1; j < validIds.length; j++) {
+            insightLinks.push({
+              id: ins.id,
+              source: validIds[i],
+              target: validIds[j],
+              insight: ins.insight,
+              domain: ins.domain || "その他",
+              created_at: ins.created_at,
+            });
+          }
+        }
+      }
+    }
+
+    return Response.json({ nodes, links, insightLinks });
   } catch (error) {
     console.error("Similar memos error:", error);
     return Response.json({ error: "Internal error" }, { status: 500 });
