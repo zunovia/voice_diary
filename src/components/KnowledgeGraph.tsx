@@ -338,6 +338,13 @@ export default function KnowledgeGraph() {
       .alphaDecay(0.005)
       .velocityDecay(0.4);
 
+    // If nodes already have positions (e.g. after stopping animation), start with low alpha
+    // so they don't jump around - just gently float
+    const hasPositions = nodes.some((n) => n.x != null && n.y != null);
+    if (hasPositions) {
+      simulation.alpha(0.05);
+    }
+
     // Keep simulation always alive (Obsidian-like constant micro-movement)
     simulation.alphaMin(0);
     // Periodically reheat to keep nodes gently floating
@@ -723,8 +730,6 @@ export default function KnowledgeGraph() {
       if (i >= sorted.length) {
         if (animationRef.current) clearInterval(animationRef.current);
         setIsAnimating(false);
-        // Instantly restore full data (no fetch)
-        setGraphData(fullDataRef.current);
         return;
       }
       const visibleIds = new Set(sorted.slice(0, i + 1).map((n) => n.id));
@@ -746,8 +751,40 @@ export default function KnowledgeGraph() {
   const stopAnimation = () => {
     if (animationRef.current) clearInterval(animationRef.current);
     setIsAnimating(false);
-    // Instantly show all data (no fetch, no delay)
-    setGraphData(fullDataRef.current);
+
+    // Capture current node positions from the running simulation
+    const currentPositions = new Map<string, { x: number; y: number }>();
+    if (simulationRef.current) {
+      (simulationRef.current.nodes() as GraphNode[]).forEach((n) => {
+        if (n.x != null && n.y != null) {
+          currentPositions.set(n.id, { x: n.x, y: n.y });
+        }
+      });
+    }
+
+    // Pre-assign positions to all nodes so they appear instantly
+    const full = fullDataRef.current;
+    const width = svgRef.current?.clientWidth || 800;
+    const height = svgRef.current?.clientHeight || 600;
+    const cx = width / 2;
+    const cy = height / 2;
+
+    const positionedNodes = full.nodes.map((n, i) => {
+      const saved = currentPositions.get(n.id);
+      if (saved) {
+        return { ...n, x: saved.x, y: saved.y };
+      }
+      // Nodes not yet visible: spread in a circle around center
+      const angle = (i / full.nodes.length) * 2 * Math.PI;
+      const radius = 100 + Math.random() * 150;
+      return { ...n, x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
+    });
+
+    setGraphData({
+      nodes: positionedNodes,
+      links: full.links,
+      insightLinks: full.insightLinks,
+    });
   };
 
   // --- Reset forces to defaults ---
