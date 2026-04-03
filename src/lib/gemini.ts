@@ -39,7 +39,22 @@ ${rawText}
 }
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const model = getGenAI().getGenerativeModel({ model: "text-embedding-004" });
-  const result = await model.embedContent(text);
-  return result.embedding.values;
+  // Use REST API directly to support outputDimensionality parameter
+  // (SDK EmbedContentRequest type doesn't include it)
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${apiKey}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      content: { parts: [{ text }] },
+      outputDimensionality: 768, // Match existing VECTOR(768) column in Supabase
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Embedding API error: ${res.status} ${err}`);
+  }
+  const data = await res.json();
+  return data.embedding.values;
 }
