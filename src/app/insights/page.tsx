@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -13,36 +13,42 @@ type Insight = {
   created_at: string;
 };
 
+const DOMAIN_COLORS: Record<string, string> = {
+  ビジネス: "text-blue-400 bg-blue-500/10 border-blue-500/20",
+  技術: "text-green-400 bg-green-500/10 border-green-500/20",
+  思想: "text-purple-400 bg-purple-500/10 border-purple-500/20",
+  アクション: "text-orange-400 bg-orange-500/10 border-orange-500/20",
+};
+
 export default function InsightsPage() {
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [error, setError] = useState("");
 
+  // Load existing insights on mount
   useEffect(() => {
-    setLoading(false);
+    fetch("/api/analyze")
+      .then((r) => r.json())
+      .then((data) => {
+        setInsights(data.insights || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   const runAnalysis = async () => {
     setAnalyzing(true);
+    setError("");
     try {
       const res = await fetch("/api/analyze", { method: "POST" });
-      if (!res.ok) throw new Error("Analysis failed");
       const data = await res.json();
-      setInsights(
-        data.insights.map(
-          (
-            ins: { memo_ids: string[]; insight: string; domain: string },
-            i: number
-          ) => ({
-            id: `new-${i}`,
-            ...ins,
-            created_at: new Date().toISOString(),
-          })
-        )
-      );
-    } catch (error) {
-      console.error(error);
-      alert("分析に失敗しました。メモが2件以上必要です。");
+      if (!res.ok) throw new Error(data.error || "分析に失敗しました");
+
+      // Prepend new insights
+      setInsights((prev) => [...(data.insights || []), ...prev]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "エラーが発生しました");
     } finally {
       setAnalyzing(false);
     }
@@ -53,7 +59,7 @@ export default function InsightsPage() {
       <div>
         <h1 className="text-lg font-bold">インサイト分析</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Claude AIがメモ間の接続を見つけ、アイデアの種を生成します
+          AIがメモ間の接続を見つけ、アイデアの種を生成します
         </p>
       </div>
 
@@ -69,12 +75,20 @@ export default function InsightsPage() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            Claude AIが分析中...
+            AIが分析中...
           </span>
         ) : (
           "メモを分析してインサイトを生成"
         )}
       </Button>
+
+      {error && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="p-3">
+            <p className="text-destructive text-sm">{error}</p>
+          </CardContent>
+        </Card>
+      )}
 
       {loading ? (
         <div className="text-center text-muted-foreground py-12">読み込み中...</div>
@@ -104,17 +118,29 @@ export default function InsightsPage() {
         </Card>
       ) : (
         <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">{insights.length}件のインサイト</p>
           {insights.map((insight) => (
-            <Card key={insight.id}>
-              <CardHeader className="pb-2">
+            <Card
+              key={insight.id}
+              className={`border ${DOMAIN_COLORS[insight.domain || ""] || "border-border"}`}
+            >
+              <CardHeader className="pb-2 pt-3 px-4">
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{insight.domain}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={DOMAIN_COLORS[insight.domain || ""] || ""}
+                  >
+                    {insight.domain || "その他"}
+                  </Badge>
                   <span className="text-[10px] text-muted-foreground">
-                    {insight.memo_ids.length}件のメモから
+                    {insight.memo_ids?.length || 0}件のメモから
+                  </span>
+                  <span className="text-[10px] text-muted-foreground ml-auto">
+                    {new Date(insight.created_at).toLocaleDateString("ja-JP")}
                   </span>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-4 pb-3">
                 <p className="text-sm leading-relaxed">{insight.insight}</p>
               </CardContent>
             </Card>
