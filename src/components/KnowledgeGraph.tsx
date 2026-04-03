@@ -154,6 +154,7 @@ export default function KnowledgeGraph() {
   // Animation
   const [isAnimating, setIsAnimating] = useState(false);
   const animationRef = useRef<NodeJS.Timeout | null>(null);
+  const fullDataRef = useRef<{ nodes: GraphNode[]; links: GraphLink[]; insightLinks: InsightLink[] }>({ nodes: [], links: [], insightLinks: [] });
 
   // --- Data fetching ---
   const prevInsightCountRef = useRef(0);
@@ -168,6 +169,7 @@ export default function KnowledgeGraph() {
           setTimeout(() => setInsightAnimating(false), 3000);
         }
         prevInsightCountRef.current = newInsightCount;
+        fullDataRef.current = data;
         setGraphData(data);
         setLoading(false);
         // Fetch ignition points
@@ -706,10 +708,11 @@ export default function KnowledgeGraph() {
 
   // --- Animation (time-lapse) ---
   const startAnimation = () => {
-    if (graphData.nodes.length === 0) return;
+    const full = fullDataRef.current;
+    if (full.nodes.length === 0) return;
     setIsAnimating(true);
 
-    const sorted = [...graphData.nodes].sort(
+    const sorted = [...full.nodes].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
@@ -720,24 +723,22 @@ export default function KnowledgeGraph() {
       if (i >= sorted.length) {
         if (animationRef.current) clearInterval(animationRef.current);
         setIsAnimating(false);
-        // Restore full data
-        fetch("/api/memos/similar")
-          .then((r) => r.json())
-          .then(setGraphData);
+        // Instantly restore full data (no fetch)
+        setGraphData(fullDataRef.current);
         return;
       }
       const visibleIds = new Set(sorted.slice(0, i + 1).map((n) => n.id));
-      setGraphData((prev) => ({
+      setGraphData({
         nodes: sorted.slice(0, i + 1),
-        links: prev.links.filter((l) => {
+        links: full.links.filter((l) => {
           const s = typeof l.source === "string" ? l.source : l.source.id;
           const t = typeof l.target === "string" ? l.target : l.target.id;
           return visibleIds.has(s) && visibleIds.has(t);
         }),
-        insightLinks: prev.insightLinks.filter(
+        insightLinks: full.insightLinks.filter(
           (il) => visibleIds.has(il.source) && visibleIds.has(il.target)
         ),
-      }));
+      });
       i++;
     }, 800);
   };
@@ -745,9 +746,8 @@ export default function KnowledgeGraph() {
   const stopAnimation = () => {
     if (animationRef.current) clearInterval(animationRef.current);
     setIsAnimating(false);
-    fetch("/api/memos/similar")
-      .then((r) => r.json())
-      .then(setGraphData);
+    // Instantly show all data (no fetch, no delay)
+    setGraphData(fullDataRef.current);
   };
 
   // --- Reset forces to defaults ---
