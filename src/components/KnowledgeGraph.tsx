@@ -95,6 +95,21 @@ export default function KnowledgeGraph() {
   const [insightAnimating, setInsightAnimating] = useState(false);
   const [hoveredInsight, setHoveredInsight] = useState<InsightLink | null>(null);
 
+  // Ignition (意味の自己増殖)
+  type Ignition = {
+    id: string;
+    memoIds: string[];
+    memoTitles: string[];
+    density: number;
+    question: string;
+    spark: string;
+    direction: string;
+    temperature: number;
+  };
+  const [ignitions, setIgnitions] = useState<Ignition[]>([]);
+  const [selectedIgnition, setSelectedIgnition] = useState<Ignition | null>(null);
+  const [showIgnitions, setShowIgnitions] = useState(true);
+
   // Selected node detail
   const [selectedMemo, setSelectedMemo] = useState<GraphNode | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
@@ -151,6 +166,13 @@ export default function KnowledgeGraph() {
         prevInsightCountRef.current = newInsightCount;
         setGraphData(data);
         setLoading(false);
+        // Fetch ignition points
+        if (data.insightLinks?.length > 0) {
+          fetch("/api/ignite")
+            .then((r) => r.json())
+            .then((d) => setIgnitions(d.ignitions || []))
+            .catch(() => {});
+        }
       })
       .catch(() => setLoading(false));
   }, []);
@@ -461,7 +483,7 @@ export default function KnowledgeGraph() {
       .data(visibleInsightLinks)
       .join("line")
       .attr("stroke", (d) => DOMAIN_COLORS[d.domain] || "#a855f7")
-      .attr("stroke-width", 2.5)
+      .attr("stroke-width", 0.3)
       .attr("stroke-dasharray", "8,4")
       .attr("filter", "url(#glow)")
       .attr("cursor", "pointer")
@@ -478,13 +500,80 @@ export default function KnowledgeGraph() {
         .attr("stroke-opacity", 0.9)
         .on("start", function () {
           d3.select(this)
-            .attr("stroke-width", 5)
+            .attr("stroke-width", 1)
             .transition()
             .duration(400)
-            .attr("stroke-width", 2.5);
+            .attr("stroke-width", 0.3);
         });
     } else {
-      insightLine.attr("stroke-opacity", 0.7);
+      insightLine.attr("stroke-opacity", 0.35);
+    }
+
+    // === IGNITION POINTS (発火ポイント) ===
+    if (showIgnitions && ignitions.length > 0) {
+      const ignitionGroup = g.append("g").attr("class", "ignitions");
+
+      ignitions.forEach((ign) => {
+        // Calculate center position of related memos
+        const relatedNodes = ign.memoIds
+          .map((id) => nodeMap.get(id))
+          .filter(Boolean);
+        if (relatedNodes.length < 2) return;
+
+        // Ignition spark group
+        const sparkGroup = ignitionGroup.append("g").attr("class", `ignition-${ign.id}`);
+
+        // Outer pulsing ring
+        sparkGroup
+          .append("circle")
+          .attr("r", 12 + ign.temperature * 8)
+          .attr("fill", "none")
+          .attr("stroke", `hsl(${30 + ign.temperature * 30}, 100%, 60%)`)
+          .attr("stroke-width", 0.5)
+          .attr("opacity", 0)
+          .attr("class", "ignite-pulse");
+
+        // Inner glow
+        sparkGroup
+          .append("circle")
+          .attr("r", 4 + ign.temperature * 4)
+          .attr("fill", `hsl(${30 + ign.temperature * 30}, 100%, 70%)`)
+          .attr("opacity", 0.6)
+          .attr("cursor", "pointer")
+          .attr("class", "ignite-core")
+          .on("click", () => setSelectedIgnition(ign));
+
+        // Question mark
+        sparkGroup
+          .append("text")
+          .text("?")
+          .attr("font-size", `${8 + ign.temperature * 4}px`)
+          .attr("fill", "#fff")
+          .attr("text-anchor", "middle")
+          .attr("dy", "0.35em")
+          .attr("pointer-events", "none")
+          .attr("font-weight", "bold");
+      });
+
+      // Pulse animation
+      let pulsePhase = 0;
+      const pulseAnimate = () => {
+        pulsePhase += 0.03;
+        const pulse = (Math.sin(pulsePhase) + 1) / 2;
+
+        g.selectAll(".ignite-pulse")
+          .attr("opacity", pulse * 0.4)
+          .attr("r", function () {
+            const base = parseFloat(d3.select(this).attr("r") || "15");
+            return base + pulse * 5;
+          });
+
+        g.selectAll(".ignite-core")
+          .attr("opacity", 0.4 + pulse * 0.4);
+
+        requestAnimationFrame(pulseAnimate);
+      };
+      requestAnimationFrame(pulseAnimate);
     }
 
     // Animate dash offset for flowing effect + slow rotation
@@ -548,6 +637,19 @@ export default function KnowledgeGraph() {
         .attr("y1", (d) => nodeMap.get(d.source)?.y || 0)
         .attr("x2", (d) => nodeMap.get(d.target)?.x || 0)
         .attr("y2", (d) => nodeMap.get(d.target)?.y || 0);
+
+      // Update ignition positions (center of related memos)
+      if (showIgnitions && ignitions.length > 0) {
+        ignitions.forEach((ign) => {
+          const relatedNodes = ign.memoIds
+            .map((id) => nodeMap.get(id))
+            .filter(Boolean);
+          if (relatedNodes.length < 2) return;
+          const cx = relatedNodes.reduce((s, n) => s + (n?.x || 0), 0) / relatedNodes.length;
+          const cy = relatedNodes.reduce((s, n) => s + (n?.y || 0), 0) / relatedNodes.length;
+          g.select(`.ignition-${ign.id}`).attr("transform", `translate(${cx},${cy})`);
+        });
+      }
     });
 
     return () => {
@@ -572,6 +674,8 @@ export default function KnowledgeGraph() {
     graphData.insightLinks,
     isRotating,
     rotationSpeed,
+    showIgnitions,
+    ignitions,
   ]);
 
   // --- Animation (time-lapse) ---
@@ -782,10 +886,84 @@ export default function KnowledgeGraph() {
             </p>
           </div>
         )}
+
+        {/* Ignition question popup */}
+        {selectedIgnition && (
+          <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/40 backdrop-blur-sm"
+            onClick={() => setSelectedIgnition(null)}
+          >
+            <div
+              className="bg-card border rounded-2xl p-6 max-w-sm mx-4 space-y-4 shadow-2xl animate-in fade-in zoom-in"
+              style={{
+                borderColor: `hsl(${30 + selectedIgnition.temperature * 30}, 100%, 40%)`,
+                boxShadow: `0 0 40px hsl(${30 + selectedIgnition.temperature * 30}, 100%, 30%, 0.3)`,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Temperature indicator */}
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full animate-pulse"
+                  style={{ backgroundColor: `hsl(${30 + selectedIgnition.temperature * 30}, 100%, 60%)` }}
+                />
+                <span className="text-[10px] text-muted-foreground">
+                  発火温度: {Math.round(selectedIgnition.temperature * 100)}%
+                </span>
+                <span className="text-[10px] text-muted-foreground ml-auto">
+                  {selectedIgnition.density}本の接続が衝突
+                </span>
+              </div>
+
+              {/* The Question */}
+              <div className="text-center py-2">
+                <p className="text-lg font-bold leading-relaxed"
+                  style={{ color: `hsl(${30 + selectedIgnition.temperature * 30}, 80%, 70%)` }}
+                >
+                  {selectedIgnition.question}
+                </p>
+              </div>
+
+              {/* Spark explanation */}
+              <p className="text-xs text-muted-foreground text-center">
+                {selectedIgnition.spark}
+              </p>
+
+              {/* Direction */}
+              <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+                {selectedIgnition.direction}
+              </div>
+
+              {/* Source memos */}
+              <div className="flex flex-wrap gap-1 justify-center">
+                {selectedIgnition.memoTitles.map((t, i) => (
+                  <Badge key={i} variant="outline" className="text-[9px]">{t}</Badge>
+                ))}
+              </div>
+
+              {/* Action: Answer this question */}
+              <a
+                href={`/record?prompt=${encodeURIComponent(selectedIgnition.question)}`}
+                className="block w-full text-center py-3 rounded-xl text-sm font-medium transition-all bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white shadow-lg"
+              >
+                この問いに答えて新しいメモを生む
+              </a>
+
+              <button
+                onClick={() => setSelectedIgnition(null)}
+                className="block w-full text-center text-xs text-muted-foreground hover:text-foreground"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* === SETTINGS PANEL (Obsidian-style) === */}
-      {settingsOpen && !selectedMemo && (
+      {settingsOpen && !selectedMemo && !selectedIgnition && (
         <div className="w-64 bg-card border-l border-border overflow-y-auto p-4 space-y-5">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">設定</h3>
@@ -811,6 +989,13 @@ export default function KnowledgeGraph() {
                 <span className="text-[9px] text-violet-400">({graphData.insightLinks.length})</span>
               </span>
               <input type="checkbox" checked={showInsights} onChange={(e) => setShowInsights(e.target.checked)} className="accent-violet-500" />
+            </label>
+            <label className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1">
+                発火ポイント
+                <span className="text-[9px] text-orange-400">({ignitions.length})</span>
+              </span>
+              <input type="checkbox" checked={showIgnitions} onChange={(e) => setShowIgnitions(e.target.checked)} className="accent-orange-500" />
             </label>
           </div>
 
