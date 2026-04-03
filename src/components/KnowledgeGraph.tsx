@@ -849,6 +849,14 @@ export default function KnowledgeGraph() {
 
     // Tick
     simulation.on("tick", () => {
+      // Boundary constraint: keep nodes inside visible area with padding
+      const pad = 30;
+      nodes.forEach((d) => {
+        if (d.fx != null) return; // skip pinned nodes
+        d.x = Math.max(pad, Math.min(width - pad, d.x || width / 2));
+        d.y = Math.max(pad, Math.min(height - pad, d.y || height / 2));
+      });
+
       link
         .attr("x1", (d) => (d.source as GraphNode).x || 0)
         .attr("y1", (d) => (d.source as GraphNode).y || 0)
@@ -1071,6 +1079,43 @@ export default function KnowledgeGraph() {
     } finally {
       setFusionLoading(false);
       setFusionPreview(null);
+    }
+  };
+
+  // --- Delete fusion node ---
+  const deleteFusion = async (fusionId: string) => {
+    if (!confirm("この融合ノードを削除しますか？")) return;
+    try {
+      const res = await fetch("/api/fuse", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: fusionId }),
+      });
+      if (!res.ok) throw new Error("削除に失敗しました");
+
+      // Remove from graph
+      setGraphData((prev) => ({
+        nodes: prev.nodes.filter((n) => n.id !== fusionId),
+        links: prev.links.filter((l) => {
+          const s = typeof l.source === "string" ? l.source : l.source.id;
+          const t = typeof l.target === "string" ? l.target : l.target.id;
+          return s !== fusionId && t !== fusionId;
+        }),
+        insightLinks: prev.insightLinks,
+      }));
+      // Also update fullDataRef
+      fullDataRef.current = {
+        nodes: fullDataRef.current.nodes.filter((n) => n.id !== fusionId),
+        links: fullDataRef.current.links.filter((l) => {
+          const s = typeof l.source === "string" ? l.source : l.source.id;
+          const t = typeof l.target === "string" ? l.target : l.target.id;
+          return s !== fusionId && t !== fusionId;
+        }),
+        insightLinks: fullDataRef.current.insightLinks,
+      };
+      setSelectedMemo(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "削除に失敗しました");
     }
   };
 
@@ -1576,12 +1621,22 @@ export default function KnowledgeGraph() {
                 {new Date(selectedMemo.created_at).toLocaleString("ja-JP")}
               </p>
 
-              {!selectedMemo.isFusion && (
+              {!selectedMemo.isFusion ? (
                 <a href={`/memo/${selectedMemo.id}`}>
                   <Button variant="outline" size="sm" className="w-full text-xs">
                     詳細を見る
                   </Button>
                 </a>
+              ) : (
+                <button
+                  onClick={() => deleteFusion(selectedMemo.id)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs text-red-400 border border-red-500/30 hover:bg-red-500/10 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  融合ノードを削除
+                </button>
               )}
             </CardContent>
           </Card>
