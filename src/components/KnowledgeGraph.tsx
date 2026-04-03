@@ -19,6 +19,8 @@ type GraphNode = {
   created_at: string;
   x?: number;
   y?: number;
+  vx?: number;
+  vy?: number;
   fx?: number | null;
   fy?: number | null;
   connectionCount?: number;
@@ -125,6 +127,10 @@ export default function KnowledgeGraph() {
     { query: "思想", color: "#a855f7" },
     { query: "生活", color: "#f97316" },
   ]);
+
+  // Rotation
+  const [rotationSpeed, setRotationSpeed] = useState(0.1); // degrees per frame
+  const [isRotating, setIsRotating] = useState(true);
 
   // Animation
   const [isAnimating, setIsAnimating] = useState(false);
@@ -278,13 +284,22 @@ export default function KnowledgeGraph() {
       });
     svg.call(zoom);
 
+    // Build combined links: regular + insight (for force calculation)
+    const nodeIdSet = new Set(nodes.map((n) => n.id));
+    const insightForceLinks = showInsights
+      ? graphData.insightLinks
+          .filter((il) => nodeIdSet.has(il.source) && nodeIdSet.has(il.target))
+          .map((il) => ({ source: il.source, target: il.target, similarity: 0.8 }))
+      : [];
+    const allForceLinks = [...links, ...insightForceLinks];
+
     // Simulation
     const simulation = d3
       .forceSimulation(nodes as d3.SimulationNodeDatum[] as GraphNode[])
       .force(
         "link",
         d3
-          .forceLink(links)
+          .forceLink(allForceLinks)
           .id((d) => (d as GraphNode).id)
           .distance(linkDistance)
           .strength(linkStrength)
@@ -292,8 +307,11 @@ export default function KnowledgeGraph() {
       .force("charge", d3.forceManyBody().strength(-repelStrength * 10))
       .force("center", d3.forceCenter(width / 2, height / 2).strength(centerStrength))
       .force("collision", d3.forceCollide().radius((d) => getNodeRadius(d as GraphNode) + 2))
-      .alphaDecay(0.01)
+      .alphaDecay(0.008)
       .velocityDecay(0.3);
+
+    // Keep simulation warm for rotation
+    simulation.alphaMin(0.001);
 
     simulationRef.current = simulation as unknown as d3.Simulation<GraphNode, GraphLink>;
 
@@ -469,14 +487,46 @@ export default function KnowledgeGraph() {
       insightLine.attr("stroke-opacity", 0.7);
     }
 
-    // Animate dash offset for flowing effect
+    // Animate dash offset for flowing effect + slow rotation
     let dashOffset = 0;
-    const animateDash = () => {
+    let rotAngle = 0;
+    let animRunning = true;
+
+    const animateLoop = () => {
+      if (!animRunning) return;
+
+      // Flowing dash effect
       dashOffset -= 0.5;
       insightLine.attr("stroke-dashoffset", dashOffset);
-      requestAnimationFrame(animateDash);
+
+      // Slow rotation: apply gentle orbital force to all nodes
+      if (isRotating && rotationSpeed > 0) {
+        const cx = width / 2;
+        const cy = height / 2;
+        rotAngle += rotationSpeed * 0.01;
+
+        nodes.forEach((n) => {
+          if (n.fx !== null && n.fx !== undefined) return; // skip dragged nodes
+          const dx = (n.x || cx) - cx;
+          const dy = (n.y || cy) - cy;
+          const cos = Math.cos(rotationSpeed * 0.002);
+          const sin = Math.sin(rotationSpeed * 0.002);
+          const nx = dx * cos - dy * sin + cx;
+          const ny = dx * sin + dy * cos + cy;
+          // Gently nudge toward rotated position
+          n.vx = ((n.vx || 0) + (nx - (n.x || cx)) * 0.02);
+          n.vy = ((n.vy || 0) + (ny - (n.y || cy)) * 0.02);
+        });
+
+        // Keep simulation alive for rotation
+        if (simulation.alpha() < 0.05) {
+          simulation.alpha(0.05).restart();
+        }
+      }
+
+      requestAnimationFrame(animateLoop);
     };
-    const dashAnimFrame = requestAnimationFrame(animateDash);
+    requestAnimationFrame(animateLoop);
 
     // Tick
     simulation.on("tick", () => {
@@ -502,7 +552,7 @@ export default function KnowledgeGraph() {
 
     return () => {
       simulation.stop();
-      cancelAnimationFrame(dashAnimFrame);
+      animRunning = false;
     };
   }, [
     filteredData,
@@ -520,6 +570,8 @@ export default function KnowledgeGraph() {
     linkDistance,
     getNodeColor,
     graphData.insightLinks,
+    isRotating,
+    rotationSpeed,
   ]);
 
   // --- Animation (time-lapse) ---
@@ -833,6 +885,24 @@ export default function KnowledgeGraph() {
                 <span>{linkDistance}</span>
               </div>
               <Slider value={[linkDistance]} onValueChange={(v) => setLinkDistance(Array.isArray(v) ? v[0] : v)} min={10} max={500} step={5} />
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* ROTATION */}
+          <div className="space-y-3">
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">回転</h4>
+            <label className="flex items-center justify-between text-xs">
+              <span>自動回転</span>
+              <input type="checkbox" checked={isRotating} onChange={(e) => setIsRotating(e.target.checked)} className="accent-primary" />
+            </label>
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>回転速度</span>
+                <span>{rotationSpeed.toFixed(2)}</span>
+              </div>
+              <Slider value={[rotationSpeed]} onValueChange={(v) => setRotationSpeed(Array.isArray(v) ? v[0] : v)} min={0} max={1} step={0.02} />
             </div>
           </div>
 
