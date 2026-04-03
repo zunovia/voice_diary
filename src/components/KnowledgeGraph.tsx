@@ -429,7 +429,8 @@ export default function KnowledgeGraph() {
       .data(fusionNodes)
       .join("path")
       .attr("d", (d) => {
-        const size = Math.pow((getNodeRadius(d) + 4) * 3, 2);
+        const r = getNodeRadius(d);
+        const size = Math.pow(r * 2.2, 2); // Regular node size, not oversized
         const symbolType = shapeMap[d.shape || "diamond"] || d3.symbolDiamond;
         return d3.symbol().type(symbolType).size(size)() || "";
       })
@@ -548,6 +549,9 @@ export default function KnowledgeGraph() {
       .attr("opacity", 0);
 
     // Drag with fusion detection
+    // Track previous fusion target to release its pin when target changes
+    let prevFusionTarget: GraphNode | null = null;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dragBehavior = d3
       .drag<SVGElement, GraphNode>()
@@ -556,15 +560,16 @@ export default function KnowledgeGraph() {
         d.fx = d.x;
         d.fy = d.y;
         fusionTargetRef.current = null;
+        prevFusionTarget = null;
       })
       .on("drag", (event, d) => {
         d.fx = event.x;
         d.fy = event.y;
 
         // Detect proximity to other nodes for fusion
-        let closest: GraphNode | null = null;
+        let closestNode: GraphNode | null = null;
         let closestDist = Infinity;
-        const fusionThreshold = 25; // pixels
+        const fusionThreshold = 60; // Wide detection range (nodes won't escape)
 
         nodes.forEach((other) => {
           if (other.id === d.id) return;
@@ -573,24 +578,43 @@ export default function KnowledgeGraph() {
           const dy = (other.y || 0) - event.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < fusionThreshold && dist < closestDist) {
-            closest = other;
+            closestNode = other;
             closestDist = dist;
           }
         });
 
+        const closest = closestNode as GraphNode | null;
         if (closest) {
+          // Release previous target if different
+          if (prevFusionTarget && prevFusionTarget.id !== closest.id) {
+            prevFusionTarget.fx = null;
+            prevFusionTarget.fy = null;
+          }
+
           fusionTargetRef.current = closest;
+          prevFusionTarget = closest;
+
+          // Pin the target so it doesn't run away from repel force!
+          closest.fx = closest.x;
+          closest.fy = closest.y;
+
           fusionZone
-            .attr("cx", (closest as GraphNode).x || 0)
-            .attr("cy", (closest as GraphNode).y || 0)
-            .attr("r", 30)
+            .attr("cx", closest.x || 0)
+            .attr("cy", closest.y || 0)
+            .attr("r", 35)
             .attr("opacity", 0.8);
           // Highlight the target
-          node.filter((n) => n.id === (closest as GraphNode).id)
+          node.filter((n) => n.id === closest!.id)
             .attr("stroke", "#fbbf24").attr("stroke-width", 3);
-          fusionNode.filter((n) => n.id === (closest as GraphNode).id)
+          fusionNode.filter((n) => n.id === closest!.id)
             .attr("stroke", "#fbbf24").attr("stroke-width", 3);
         } else {
+          // Release previously pinned target
+          if (prevFusionTarget) {
+            prevFusionTarget.fx = null;
+            prevFusionTarget.fy = null;
+            prevFusionTarget = null;
+          }
           fusionTargetRef.current = null;
           fusionZone.attr("opacity", 0);
           node.attr("stroke", "transparent");
@@ -605,6 +629,14 @@ export default function KnowledgeGraph() {
         fusionNode.attr("stroke", "#ffffff40");
 
         const target = fusionTargetRef.current;
+
+        // Release pinned target
+        if (prevFusionTarget) {
+          prevFusionTarget.fx = null;
+          prevFusionTarget.fy = null;
+          prevFusionTarget = null;
+        }
+
         if (target && target.id !== d.id) {
           // Trigger fusion!
           d.fx = null;
