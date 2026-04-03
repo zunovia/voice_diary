@@ -284,7 +284,9 @@ export default function KnowledgeGraph() {
     if (nodes.length === 0) return;
 
     const svg = d3.select(svgRef.current);
+    // Fully clear all previous SVG content (including leaked elements)
     svg.selectAll("*").remove();
+    svg.html("");
 
     const width = svgRef.current.clientWidth;
     const height = svgRef.current.clientHeight;
@@ -385,7 +387,7 @@ export default function KnowledgeGraph() {
       .attr("stroke-width", linkThickness)
       .attr("marker-end", showArrows ? "url(#arrowhead)" : null);
 
-    // Fusion parent links (distinct style)
+    // Fusion parent links (very subtle, like insight links)
     const fusionLink = g
       .append("g")
       .attr("class", "fusion-links")
@@ -393,9 +395,9 @@ export default function KnowledgeGraph() {
       .data(fusionParentLinks)
       .join("line")
       .attr("stroke", "#f59e0b")
-      .attr("stroke-opacity", 0.6)
-      .attr("stroke-width", 1.5)
-      .attr("stroke-dasharray", "6,3");
+      .attr("stroke-opacity", 0.25)
+      .attr("stroke-width", 0.4)
+      .attr("stroke-dasharray", "3,3");
 
     // Split nodes into regular and fusion
     const regularNodes = nodes.filter((n) => !n.isFusion);
