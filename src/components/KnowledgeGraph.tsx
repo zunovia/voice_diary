@@ -430,7 +430,7 @@ export default function KnowledgeGraph() {
       .join("path")
       .attr("d", (d) => {
         const r = getNodeRadius(d);
-        const size = Math.pow(r * 2.2, 2); // Regular node size, not oversized
+        const size = Math.pow(r * 1.5, 2); // Compact fusion node size
         const symbolType = shapeMap[d.shape || "diamond"] || d3.symbolDiamond;
         return d3.symbol().type(symbolType).size(size)() || "";
       })
@@ -1524,6 +1524,11 @@ export default function KnowledgeGraph() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center gap-2">
+                {selectedMemo.isFusion && (
+                  <Badge className="text-[9px] bg-amber-500/20 text-amber-400 border-amber-500/30">
+                    {selectedMemo.shape === "star" ? "⭐ 創造的融合" : selectedMemo.shape === "triangle" ? "🔺 技術的融合" : "💎 ビジネス融合"}
+                  </Badge>
+                )}
                 <Badge style={{ backgroundColor: getNodeColor(selectedMemo) + "20", color: getNodeColor(selectedMemo) }}>
                   {selectedMemo.category}
                 </Badge>
@@ -1542,17 +1547,40 @@ export default function KnowledgeGraph() {
                 ))}
               </div>
 
+              {selectedMemo.isFusion && selectedMemo.parentMemoIds && (
+                <>
+                  <Separator />
+                  <p className="text-[10px] text-muted-foreground font-medium">融合元メモ:</p>
+                  <div className="space-y-1">
+                    {selectedMemo.parentMemoIds.map((pid) => {
+                      const parent = graphData.nodes.find((n) => n.id === pid);
+                      return parent ? (
+                        <button
+                          key={pid}
+                          onClick={() => setSelectedMemo(parent)}
+                          className="block w-full text-left text-[11px] text-blue-400 hover:text-blue-300 hover:underline truncate"
+                        >
+                          → {parent.title}
+                        </button>
+                      ) : null;
+                    })}
+                  </div>
+                </>
+              )}
+
               <Separator />
 
               <p className="text-[10px] text-muted-foreground">
                 {new Date(selectedMemo.created_at).toLocaleString("ja-JP")}
               </p>
 
-              <a href={`/memo/${selectedMemo.id}`}>
-                <Button variant="outline" size="sm" className="w-full text-xs">
-                  詳細を見る
-                </Button>
-              </a>
+              {!selectedMemo.isFusion && (
+                <a href={`/memo/${selectedMemo.id}`}>
+                  <Button variant="outline" size="sm" className="w-full text-xs">
+                    詳細を見る
+                  </Button>
+                </a>
+              )}
             </CardContent>
           </Card>
         </div>
