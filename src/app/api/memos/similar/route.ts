@@ -90,7 +90,52 @@ export async function GET() {
       }
     }
 
-    return Response.json({ nodes, links, insightLinks });
+    // Fetch fusion nodes
+    const { data: fusions } = await supabase
+      .from("fusions")
+      .select("id, title, insight, summary, tags, category, shape, parent_memo_ids, created_at, embedding")
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    // Add fusion nodes to the graph
+    const fusionNodes = (fusions || []).map((f) => ({
+      id: f.id,
+      title: f.title || "融合",
+      summary: f.summary || f.insight || "",
+      category: f.category || "その他",
+      tags: f.tags || [],
+      created_at: f.created_at,
+      isFusion: true,
+      shape: f.shape || "diamond",
+      parentMemoIds: f.parent_memo_ids || [],
+    }));
+
+    // Add parent links (fusion -> parent memos)
+    const fusionLinks: Array<{ source: string; target: string; similarity: number; isFusionLink?: boolean }> = [];
+    for (const f of fusions || []) {
+      for (const parentId of f.parent_memo_ids || []) {
+        if (memoIdSet.has(parentId)) {
+          fusionLinks.push({ source: f.id, target: parentId, similarity: 1.0, isFusionLink: true });
+        }
+      }
+    }
+
+    // Compute similarity links between fusions and memos
+    const fusionsWithEmbedding = (fusions || []).filter((f) => f.embedding);
+    for (const f of fusionsWithEmbedding) {
+      for (const m of memosWithEmbedding) {
+        if ((f.parent_memo_ids || []).includes(m.id)) continue; // skip parent links (already added)
+        const sim = cosineSimilarity(f.embedding, m.embedding);
+        if (sim > 0.5) {
+          links.push({ source: f.id, target: m.id, similarity: Math.round(sim * 1000) / 1000 });
+        }
+      }
+    }
+
+    const allNodes = [...nodes, ...fusionNodes];
+    const allLinks = [...links, ...fusionLinks];
+
+    return Response.json({ nodes: allNodes, links: allLinks, insightLinks });
   } catch (error) {
     console.error("Similar memos error:", error);
     return Response.json({ error: "Internal error" }, { status: 500 });

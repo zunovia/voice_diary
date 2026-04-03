@@ -24,12 +24,17 @@ type GraphNode = {
   fx?: number | null;
   fy?: number | null;
   connectionCount?: number;
+  // Fusion node fields
+  isFusion?: boolean;
+  shape?: "star" | "triangle" | "diamond";
+  parentMemoIds?: string[];
 };
 
 type GraphLink = {
   source: string | GraphNode;
   target: string | GraphNode;
   similarity: number;
+  isFusionLink?: boolean;
 };
 
 type InsightLink = {
@@ -150,6 +155,11 @@ export default function KnowledgeGraph() {
   const rotationSpeedRef = useRef(0.1);
   useEffect(() => { isRotatingRef.current = isRotating; }, [isRotating]);
   useEffect(() => { rotationSpeedRef.current = rotationSpeed; }, [rotationSpeed]);
+
+  // Fusion (ノード融合)
+  const [fusionPreview, setFusionPreview] = useState<{ nodeA: GraphNode; nodeB: GraphNode } | null>(null);
+  const [fusionLoading, setFusionLoading] = useState(false);
+  const fusionTargetRef = useRef<GraphNode | null>(null);
 
   // Animation
   const [isAnimating, setIsAnimating] = useState(false);
@@ -360,34 +370,86 @@ export default function KnowledgeGraph() {
       return nodeSize + (d.connectionCount || 0) * 1.5;
     }
 
-    // Links
+    // Links (regular + fusion parent links)
+    const regularLinks = links.filter((l) => !(l as GraphLink).isFusionLink);
+    const fusionParentLinks = links.filter((l) => (l as GraphLink).isFusionLink);
+
     const link = g
       .append("g")
       .attr("class", "links")
       .selectAll("line")
-      .data(links)
+      .data(regularLinks)
       .join("line")
       .attr("stroke", "#374151")
       .attr("stroke-opacity", 0.4)
       .attr("stroke-width", linkThickness)
       .attr("marker-end", showArrows ? "url(#arrowhead)" : null);
 
-    // Nodes
+    // Fusion parent links (distinct style)
+    const fusionLink = g
+      .append("g")
+      .attr("class", "fusion-links")
+      .selectAll("line")
+      .data(fusionParentLinks)
+      .join("line")
+      .attr("stroke", "#f59e0b")
+      .attr("stroke-opacity", 0.6)
+      .attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "6,3");
+
+    // Split nodes into regular and fusion
+    const regularNodes = nodes.filter((n) => !n.isFusion);
+    const fusionNodes = nodes.filter((n) => n.isFusion);
+
+    // D3 symbol generators for fusion shapes
+    const shapeMap: Record<string, d3.SymbolType> = {
+      star: d3.symbolStar,
+      triangle: d3.symbolTriangle,
+      diamond: d3.symbolDiamond,
+    };
+
+    // Regular Nodes (circles)
     const node = g
       .append("g")
       .attr("class", "nodes")
       .selectAll("circle")
-      .data(nodes)
+      .data(regularNodes)
       .join("circle")
       .attr("r", getNodeRadius)
       .attr("fill", getNodeColor)
       .attr("stroke", "transparent")
       .attr("stroke-width", 2)
+      .attr("cursor", "pointer");
+
+    // Fusion Nodes (special shapes)
+    const fusionNode = g
+      .append("g")
+      .attr("class", "fusion-nodes")
+      .selectAll("path")
+      .data(fusionNodes)
+      .join("path")
+      .attr("d", (d) => {
+        const size = Math.pow((getNodeRadius(d) + 4) * 3, 2);
+        const symbolType = shapeMap[d.shape || "diamond"] || d3.symbolDiamond;
+        return d3.symbol().type(symbolType).size(size)() || "";
+      })
+      .attr("fill", (d) => {
+        const shapeColors: Record<string, string> = { star: "#fbbf24", triangle: "#34d399", diamond: "#a78bfa" };
+        return shapeColors[d.shape || "diamond"] || "#fbbf24";
+      })
+      .attr("stroke", "#ffffff40")
+      .attr("stroke-width", 1.5)
       .attr("cursor", "pointer")
-      .on("click", (_, d) => setSelectedMemo(d))
+      .attr("filter", "url(#glow)");
+
+    // Click handler
+    node.on("click", (_, d) => setSelectedMemo(d));
+    fusionNode.on("click", (_, d) => setSelectedMemo(d));
+
+    // Hover handlers (use function() for D3's this binding)
+    node
       .on("mouseenter", function (_, d) {
         setHoveredNode(d.id);
-        // Highlight connected
         const connectedIds = new Set<string>();
         connectedIds.add(d.id);
         links.forEach((l) => {
@@ -396,70 +458,168 @@ export default function KnowledgeGraph() {
           if (s === d.id) connectedIds.add(t);
           if (t === d.id) connectedIds.add(s);
         });
-
         node.attr("opacity", (n) => (connectedIds.has(n.id) ? 1 : 0.1));
+        fusionNode.attr("opacity", (n) => (connectedIds.has(n.id) ? 1 : 0.1));
         link.attr("stroke-opacity", (l) => {
           const s = typeof l.source === "string" ? l.source : l.source.id;
           const t = typeof l.target === "string" ? l.target : l.target.id;
           return s === d.id || t === d.id ? 0.8 : 0.03;
         });
+        fusionLink.attr("stroke-opacity", (l) => {
+          const s = typeof l.source === "string" ? l.source : l.source.id;
+          const t = typeof l.target === "string" ? l.target : l.target.id;
+          return s === d.id || t === d.id ? 0.9 : 0.1;
+        });
         label.attr("opacity", (n) => (connectedIds.has(n.id) ? 1 : 0.05));
-
-        d3.select(this)
-          .transition()
-          .duration(150)
-          .attr("r", getNodeRadius(d) * 1.4)
-          .attr("stroke", "#fff")
-          .attr("stroke-width", 2);
+        d3.select(this).transition().duration(150)
+          .attr("r", getNodeRadius(d) * 1.4).attr("stroke", "#fff").attr("stroke-width", 2);
       })
       .on("mouseleave", function (_, d) {
         setHoveredNode(null);
         node.attr("opacity", 1);
+        fusionNode.attr("opacity", 1);
         link.attr("stroke-opacity", 0.4);
+        fusionLink.attr("stroke-opacity", 0.6);
         label.attr("opacity", 1);
-        d3.select(this)
-          .transition()
-          .duration(150)
-          .attr("r", getNodeRadius(d))
-          .attr("stroke", "transparent");
+        d3.select(this).transition().duration(150)
+          .attr("r", getNodeRadius(d)).attr("stroke", "transparent");
       });
 
-    // Drag
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fusionNode
+      .on("mouseenter", function (_, d) {
+        setHoveredNode(d.id);
+        const connectedIds = new Set<string>();
+        connectedIds.add(d.id);
+        links.forEach((l) => {
+          const s = typeof l.source === "string" ? l.source : l.source.id;
+          const t = typeof l.target === "string" ? l.target : l.target.id;
+          if (s === d.id) connectedIds.add(t);
+          if (t === d.id) connectedIds.add(s);
+        });
+        node.attr("opacity", (n) => (connectedIds.has(n.id) ? 1 : 0.1));
+        fusionNode.attr("opacity", (n) => (connectedIds.has(n.id) ? 1 : 0.1));
+        link.attr("stroke-opacity", (l) => {
+          const s = typeof l.source === "string" ? l.source : l.source.id;
+          const t = typeof l.target === "string" ? l.target : l.target.id;
+          return s === d.id || t === d.id ? 0.8 : 0.03;
+        });
+        fusionLink.attr("stroke-opacity", (l) => {
+          const s = typeof l.source === "string" ? l.source : l.source.id;
+          const t = typeof l.target === "string" ? l.target : l.target.id;
+          return s === d.id || t === d.id ? 0.9 : 0.1;
+        });
+        label.attr("opacity", (n) => (connectedIds.has(n.id) ? 1 : 0.05));
+        d3.select(this).transition().duration(150)
+          .attr("stroke", "#fff").attr("stroke-width", 2.5);
+      })
+      .on("mouseleave", function (_, d) {
+        setHoveredNode(null);
+        node.attr("opacity", 1);
+        fusionNode.attr("opacity", 1);
+        link.attr("stroke-opacity", 0.4);
+        fusionLink.attr("stroke-opacity", 0.6);
+        label.attr("opacity", 1);
+        d3.select(this).transition().duration(150)
+          .attr("stroke", "#ffffff40").attr("stroke-width", 1.5);
+      });
+
     // Double-click to release pinned node
-    node.on("dblclick", (event, d) => {
+    node.on("dblclick", function (event, d) {
       event.stopPropagation();
-      d.fx = null;
-      d.fy = null;
-      d3.select(event.currentTarget as SVGCircleElement)
-        .attr("stroke", "transparent")
-        .attr("stroke-width", 2);
+      d.fx = null; d.fy = null;
+      d3.select(this).attr("stroke", "transparent").attr("stroke-width", 2);
+      simulation.alpha(0.3).restart();
+    });
+    fusionNode.on("dblclick", function (event, d) {
+      event.stopPropagation();
+      d.fx = null; d.fy = null;
+      d3.select(this).attr("stroke", "#ffffff40").attr("stroke-width", 1.5);
       simulation.alpha(0.3).restart();
     });
 
-    // Drag: node stays pinned where you drop it (可塑性)
+    // Fusion zone indicator (hidden initially)
+    const fusionZone = g.append("circle")
+      .attr("class", "fusion-zone")
+      .attr("r", 0)
+      .attr("fill", "none")
+      .attr("stroke", "#fbbf24")
+      .attr("stroke-width", 2)
+      .attr("stroke-dasharray", "4,4")
+      .attr("opacity", 0);
+
+    // Drag with fusion detection
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (node as any).call(
-      d3
-        .drag<SVGCircleElement, GraphNode>()
-        .on("start", (event, d) => {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x;
-          d.fy = d.y;
-        })
-        .on("drag", (event, d) => {
-          d.fx = event.x;
-          d.fy = event.y;
-        })
-        .on("end", (event, d) => {
-          if (!event.active) simulation.alphaTarget(0.05);
-          // Stay pinned! (fx/fy remain set)
-          // Show pin indicator
-          d3.select(event.sourceEvent?.target as SVGCircleElement)
-            .attr("stroke", "#ffffff30")
-            .attr("stroke-width", 1);
-        })
-    );
+    const dragBehavior = d3
+      .drag<SVGElement, GraphNode>()
+      .on("start", (event, d) => {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+        fusionTargetRef.current = null;
+      })
+      .on("drag", (event, d) => {
+        d.fx = event.x;
+        d.fy = event.y;
+
+        // Detect proximity to other nodes for fusion
+        let closest: GraphNode | null = null;
+        let closestDist = Infinity;
+        const fusionThreshold = 25; // pixels
+
+        nodes.forEach((other) => {
+          if (other.id === d.id) return;
+          if (other.isFusion && d.isFusion) return; // no fusion-fusion
+          const dx = (other.x || 0) - event.x;
+          const dy = (other.y || 0) - event.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < fusionThreshold && dist < closestDist) {
+            closest = other;
+            closestDist = dist;
+          }
+        });
+
+        if (closest) {
+          fusionTargetRef.current = closest;
+          fusionZone
+            .attr("cx", (closest as GraphNode).x || 0)
+            .attr("cy", (closest as GraphNode).y || 0)
+            .attr("r", 30)
+            .attr("opacity", 0.8);
+          // Highlight the target
+          node.filter((n) => n.id === (closest as GraphNode).id)
+            .attr("stroke", "#fbbf24").attr("stroke-width", 3);
+          fusionNode.filter((n) => n.id === (closest as GraphNode).id)
+            .attr("stroke", "#fbbf24").attr("stroke-width", 3);
+        } else {
+          fusionTargetRef.current = null;
+          fusionZone.attr("opacity", 0);
+          node.attr("stroke", "transparent");
+          fusionNode.attr("stroke", "#ffffff40");
+        }
+      })
+      .on("end", (event, d) => {
+        if (!event.active) simulation.alphaTarget(0.05);
+
+        fusionZone.attr("opacity", 0);
+        node.attr("stroke", "transparent");
+        fusionNode.attr("stroke", "#ffffff40");
+
+        const target = fusionTargetRef.current;
+        if (target && target.id !== d.id) {
+          // Trigger fusion!
+          d.fx = null;
+          d.fy = null;
+          setFusionPreview({ nodeA: d, nodeB: target });
+        } else {
+          // Normal pin behavior
+          d3.select(event.sourceEvent?.target as SVGElement)
+            .attr("stroke", "#ffffff30").attr("stroke-width", 1);
+        }
+        fusionTargetRef.current = null;
+      });
+
+    (node as any).call(dragBehavior);
+    (fusionNode as any).call(dragBehavior);
 
     // Labels
     const label = g
@@ -661,7 +821,16 @@ export default function KnowledgeGraph() {
         .attr("x2", (d) => (d.target as GraphNode).x || 0)
         .attr("y2", (d) => (d.target as GraphNode).y || 0);
 
+      fusionLink
+        .attr("x1", (d) => (d.source as GraphNode).x || 0)
+        .attr("y1", (d) => (d.source as GraphNode).y || 0)
+        .attr("x2", (d) => (d.target as GraphNode).x || 0)
+        .attr("y2", (d) => (d.target as GraphNode).y || 0);
+
       node.attr("cx", (d) => d.x || 0).attr("cy", (d) => d.y || 0);
+
+      // Fusion nodes use transform for positioning
+      fusionNode.attr("transform", (d) => `translate(${d.x || 0},${d.y || 0})`);
 
       g.selectAll<SVGTextElement, GraphNode>(".node-label")
         .attr("x", (d) => d.x || 0)
@@ -814,6 +983,63 @@ export default function KnowledgeGraph() {
     );
   };
 
+  // --- Fusion execution ---
+  const executeFusion = async (nodeA: GraphNode, nodeB: GraphNode) => {
+    setFusionLoading(true);
+    try {
+      const res = await fetch("/api/fuse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memoIdA: nodeA.id, memoIdB: nodeB.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "融合に失敗しました");
+
+      const fusion = data.fusion;
+      // Add the new fusion node to the graph at the midpoint of the two parents
+      const midX = ((nodeA.x || 0) + (nodeB.x || 0)) / 2;
+      const midY = ((nodeA.y || 0) + (nodeB.y || 0)) / 2;
+      const newNode: GraphNode = {
+        id: fusion.id,
+        title: fusion.title,
+        summary: fusion.summary || fusion.insight,
+        category: fusion.category || "その他",
+        tags: fusion.tags || [],
+        created_at: fusion.created_at,
+        isFusion: true,
+        shape: fusion.shape || "diamond",
+        parentMemoIds: fusion.parent_memo_ids,
+        x: midX,
+        y: midY,
+      };
+
+      // Add parent links
+      const parentLinks: GraphLink[] = [
+        { source: fusion.id, target: nodeA.id, similarity: 1.0, isFusionLink: true },
+        { source: fusion.id, target: nodeB.id, similarity: 1.0, isFusionLink: true },
+      ];
+
+      setGraphData((prev) => ({
+        nodes: [...prev.nodes, newNode],
+        links: [...prev.links, ...parentLinks],
+        insightLinks: prev.insightLinks,
+      }));
+
+      // Also update fullDataRef
+      fullDataRef.current = {
+        nodes: [...fullDataRef.current.nodes, newNode],
+        links: [...fullDataRef.current.links, ...parentLinks],
+        insightLinks: fullDataRef.current.insightLinks,
+      };
+    } catch (err) {
+      console.error("Fusion error:", err);
+      alert(err instanceof Error ? err.message : "融合に失敗しました");
+    } finally {
+      setFusionLoading(false);
+      setFusionPreview(null);
+    }
+  };
+
   const allCategories = [...new Set(graphData.nodes.map((n) => n.category))];
 
   return (
@@ -904,7 +1130,10 @@ export default function KnowledgeGraph() {
 
         {/* Bottom-left: stats */}
         <div className="absolute bottom-3 left-3 text-[10px] text-muted-foreground bg-card/80 backdrop-blur rounded px-2 py-1">
-          {filteredData().nodes.length} ノード / {filteredData().links.length} 接続
+          {filteredData().nodes.filter((n) => !n.isFusion).length} ノード / {filteredData().links.length} 接続
+          {graphData.nodes.filter((n) => n.isFusion).length > 0 && (
+            <span className="text-amber-400"> / {graphData.nodes.filter((n) => n.isFusion).length} 融合</span>
+          )}
           {graphData.insightLinks.length > 0 && (
             <span className="text-violet-400"> / {graphData.insightLinks.length} インサイト</span>
           )}
@@ -1020,6 +1249,60 @@ export default function KnowledgeGraph() {
               >
                 閉じる
               </button>
+            </div>
+          </div>
+        )}
+        {/* Fusion confirmation modal */}
+        {fusionPreview && (
+          <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/50 backdrop-blur-sm"
+            onClick={() => !fusionLoading && setFusionPreview(null)}
+          >
+            <div
+              className="bg-card border border-amber-500/40 rounded-2xl p-6 max-w-sm mx-4 space-y-4 shadow-2xl animate-in fade-in zoom-in"
+              style={{ boxShadow: "0 0 60px rgba(251, 191, 36, 0.2)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center">
+                <div className="text-2xl mb-2">⚡</div>
+                <h3 className="font-bold text-sm">ノード融合</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  2つのメモをAIが融合し、新しいアイデアを生成します
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 justify-center">
+                <div className="bg-muted rounded-lg px-3 py-2 text-xs font-medium max-w-[120px] truncate">
+                  {fusionPreview.nodeA.title}
+                </div>
+                <span className="text-amber-500 font-bold">+</span>
+                <div className="bg-muted rounded-lg px-3 py-2 text-xs font-medium max-w-[120px] truncate">
+                  {fusionPreview.nodeB.title}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setFusionPreview(null)}
+                  disabled={fusionLoading}
+                  className="flex-1 py-2.5 rounded-xl text-xs border border-border hover:bg-muted transition-colors disabled:opacity-50"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={() => executeFusion(fusionPreview.nodeA, fusionPreview.nodeB)}
+                  disabled={fusionLoading}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white shadow-lg transition-all disabled:opacity-50"
+                >
+                  {fusionLoading ? (
+                    <span className="flex items-center justify-center gap-1">
+                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      融合中...
+                    </span>
+                  ) : (
+                    "融合する"
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}
