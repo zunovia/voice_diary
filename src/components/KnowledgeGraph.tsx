@@ -143,9 +143,13 @@ export default function KnowledgeGraph() {
     { query: "生活", color: "#f97316" },
   ]);
 
-  // Rotation
-  const [rotationSpeed, setRotationSpeed] = useState(0.1); // degrees per frame
+  // Rotation (use refs to avoid full re-render on toggle)
+  const [rotationSpeed, setRotationSpeed] = useState(0.1);
   const [isRotating, setIsRotating] = useState(true);
+  const isRotatingRef = useRef(true);
+  const rotationSpeedRef = useRef(0.1);
+  useEffect(() => { isRotatingRef.current = isRotating; }, [isRotating]);
+  useEffect(() => { rotationSpeedRef.current = rotationSpeed; }, [rotationSpeed]);
 
   // Animation
   const [isAnimating, setIsAnimating] = useState(false);
@@ -329,11 +333,17 @@ export default function KnowledgeGraph() {
       .force("charge", d3.forceManyBody().strength(-repelStrength * 10))
       .force("center", d3.forceCenter(width / 2, height / 2).strength(centerStrength))
       .force("collision", d3.forceCollide().radius((d) => getNodeRadius(d as GraphNode) + 2))
-      .alphaDecay(0.008)
-      .velocityDecay(0.3);
+      .alphaDecay(0.005)
+      .velocityDecay(0.4);
 
-    // Keep simulation warm for rotation
-    simulation.alphaMin(0.001);
+    // Keep simulation always alive (Obsidian-like constant micro-movement)
+    simulation.alphaMin(0);
+    // Periodically reheat to keep nodes gently floating
+    const reheatInterval = setInterval(() => {
+      if (simulation.alpha() < 0.02) {
+        simulation.alpha(0.02).restart();
+      }
+    }, 2000);
 
     simulationRef.current = simulation as unknown as d3.Simulation<GraphNode, GraphLink>;
 
@@ -407,6 +417,19 @@ export default function KnowledgeGraph() {
 
     // Drag
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // Double-click to release pinned node
+    node.on("dblclick", (event, d) => {
+      event.stopPropagation();
+      d.fx = null;
+      d.fy = null;
+      d3.select(event.currentTarget as SVGCircleElement)
+        .attr("stroke", "transparent")
+        .attr("stroke-width", 2);
+      simulation.alpha(0.3).restart();
+    });
+
+    // Drag: node stays pinned where you drop it (可塑性)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (node as any).call(
       d3
         .drag<SVGCircleElement, GraphNode>()
@@ -420,9 +443,12 @@ export default function KnowledgeGraph() {
           d.fy = event.y;
         })
         .on("end", (event, d) => {
-          if (!event.active) simulation.alphaTarget(0);
-          d.fx = null;
-          d.fy = null;
+          if (!event.active) simulation.alphaTarget(0.05);
+          // Stay pinned! (fx/fy remain set)
+          // Show pin indicator
+          d3.select(event.sourceEvent?.target as SVGCircleElement)
+            .attr("stroke", "#ffffff30")
+            .attr("stroke-width", 1);
         })
     );
 
@@ -589,17 +615,18 @@ export default function KnowledgeGraph() {
       insightLine.attr("stroke-dashoffset", dashOffset);
 
       // Slow rotation: apply gentle orbital force to all nodes
-      if (isRotating && rotationSpeed > 0) {
+      if (isRotatingRef.current && rotationSpeedRef.current > 0) {
         const cx = width / 2;
         const cy = height / 2;
-        rotAngle += rotationSpeed * 0.01;
+        const speed = rotationSpeedRef.current;
+        rotAngle += speed * 0.01;
 
         nodes.forEach((n) => {
-          if (n.fx !== null && n.fx !== undefined) return; // skip dragged nodes
+          if (n.fx !== null && n.fx !== undefined) return; // skip pinned nodes
           const dx = (n.x || cx) - cx;
           const dy = (n.y || cy) - cy;
-          const cos = Math.cos(rotationSpeed * 0.002);
-          const sin = Math.sin(rotationSpeed * 0.002);
+          const cos = Math.cos(speed * 0.002);
+          const sin = Math.sin(speed * 0.002);
           const nx = dx * cos - dy * sin + cx;
           const ny = dx * sin + dy * cos + cy;
           // Gently nudge toward rotated position
@@ -655,6 +682,7 @@ export default function KnowledgeGraph() {
     return () => {
       simulation.stop();
       animRunning = false;
+      clearInterval(reheatInterval);
     };
   }, [
     filteredData,
@@ -672,8 +700,6 @@ export default function KnowledgeGraph() {
     linkDistance,
     getNodeColor,
     graphData.insightLinks,
-    isRotating,
-    rotationSpeed,
     showIgnitions,
     ignitions,
   ]);
