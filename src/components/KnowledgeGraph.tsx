@@ -72,10 +72,10 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const DEFAULT_FORCES = {
-  centerStrength: 0.48,
-  repelStrength: 16.41,
+  centerStrength: 1.2,
+  repelStrength: 6,
   linkStrength: 0.44,
-  linkDistance: 198,
+  linkDistance: 120,
 };
 
 const DEFAULT_DISPLAY = {
@@ -348,7 +348,7 @@ export default function KnowledgeGraph() {
       .force("center", d3.forceCenter(width / 2, height / 2).strength(centerStrength))
       .force("collision", d3.forceCollide().radius((d) => getNodeRadius(d as GraphNode) + 2))
       .alphaDecay(0.005)
-      .velocityDecay(0.4);
+      .velocityDecay(0.55);
 
     // If nodes already have positions (e.g. after stopping animation), start with low alpha
     // so they don't jump around - just gently float
@@ -849,12 +849,22 @@ export default function KnowledgeGraph() {
 
     // Tick
     simulation.on("tick", () => {
-      // Boundary constraint: keep nodes inside visible area with padding
-      const pad = 30;
+      // Boundary constraint: keep nodes in a soft zone around center
+      // Nodes that drift too far get gently pulled back
+      const cx = width / 2;
+      const cy = height / 2;
+      const maxRadius = Math.min(width, height) * 0.4; // 40% of the smaller dimension
       nodes.forEach((d) => {
         if (d.fx != null) return; // skip pinned nodes
-        d.x = Math.max(pad, Math.min(width - pad, d.x || width / 2));
-        d.y = Math.max(pad, Math.min(height - pad, d.y || height / 2));
+        const dx = (d.x || cx) - cx;
+        const dy = (d.y || cy) - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > maxRadius) {
+          // Soft pull toward center (stronger the further out)
+          const pull = (dist - maxRadius) / dist * 0.3;
+          d.x = (d.x || cx) - dx * pull;
+          d.y = (d.y || cy) - dy * pull;
+        }
       });
 
       link
