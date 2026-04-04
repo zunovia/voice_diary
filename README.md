@@ -102,6 +102,36 @@
 
 ---
 
+## アップデート方法
+
+新機能が追加されたときに、あなたのアプリを最新版に更新する方法です。
+
+### 手順（2ステップ・1分で完了）
+
+**ステップ1: GitHubでコードを同期**
+
+1. **[github.com](https://github.com)** にログイン
+2. 自分のリポジトリ（`あなたのユーザー名/voice_diary`）を開く
+3. ページ上部に **「This branch is X commits behind zunovia:main」** と表示されていたら更新があります
+4. **「Sync fork」** ボタンをクリック → **「Update branch」** を押す
+
+<p align="center">
+  <img src="https://docs.github.com/assets/cb-74638/mw-1440/images/help/repository/sync-fork-dropdown.webp" alt="Sync fork" width="400" />
+</p>
+
+**ステップ2: 自動デプロイ**
+
+- Sync forkすると**Vercelが自動で再デプロイ**します
+- 2〜3分待つだけで最新版に更新完了！
+- ※データ（メモ、融合ノード等）はSupabaseに保存されているので消えません
+
+### 更新があるか確認するには
+
+- このページ（[zunovia/voice_diary](https://github.com/zunovia/voice_diary)）の最新コミットの日付を見てください
+- 自分のリポジトリの日付より新しければ、Sync forkで更新できます
+
+---
+
 ## ローカル開発
 
 ```bash
