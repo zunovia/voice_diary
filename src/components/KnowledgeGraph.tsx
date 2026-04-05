@@ -85,6 +85,7 @@ const DEFAULT_DISPLAY = {
   textFadeThreshold: 1.0,
   nodeSize: 4,
   linkThickness: 1,
+  labelSize: 9,
 };
 
 export default function KnowledgeGraph() {
@@ -133,6 +134,7 @@ export default function KnowledgeGraph() {
   const [textFadeThreshold, setTextFadeThreshold] = useState(DEFAULT_DISPLAY.textFadeThreshold);
   const [nodeSize, setNodeSize] = useState(DEFAULT_DISPLAY.nodeSize);
   const [linkThickness, setLinkThickness] = useState(DEFAULT_DISPLAY.linkThickness);
+  const [labelSize, setLabelSize] = useState(DEFAULT_DISPLAY.labelSize);
 
   // Forces (Obsidian-style physics)
   const [centerStrength, setCenterStrength] = useState(DEFAULT_FORCES.centerStrength);
@@ -655,7 +657,7 @@ export default function KnowledgeGraph() {
     (node as any).call(dragBehavior);
     (fusionNode as any).call(dragBehavior);
 
-    // Labels
+    // Labels (hidden when labelSize is 0)
     const label = g
       .append("g")
       .attr("class", "labels")
@@ -664,24 +666,26 @@ export default function KnowledgeGraph() {
       .join("text")
       .attr("class", "node-label")
       .text((d) => d.title || "")
-      .attr("font-size", "9px")
+      .attr("font-size", `${labelSize}px`)
       .attr("fill", "#9ca3af")
       .attr("text-anchor", "middle")
-      .attr("dy", (d) => getNodeRadius(d) + 12)
-      .attr("pointer-events", "none");
+      .attr("dy", (d) => getNodeRadius(d) + labelSize + 3)
+      .attr("pointer-events", "none")
+      .attr("display", labelSize === 0 ? "none" : null);
 
     // Tag labels
-    if (showTags) {
+    if (showTags && labelSize > 0) {
+      const tagFontSize = Math.max(5, Math.round(labelSize * 0.78));
       g.append("g")
         .attr("class", "tag-labels")
         .selectAll("text")
         .data(nodes.filter((n) => n.tags.length > 0))
         .join("text")
         .text((d) => d.tags.slice(0, 2).map((t) => `#${t}`).join(" "))
-        .attr("font-size", "7px")
+        .attr("font-size", `${tagFontSize}px`)
         .attr("fill", "#6b7280")
         .attr("text-anchor", "middle")
-        .attr("dy", (d) => getNodeRadius(d) + 22)
+        .attr("dy", (d) => getNodeRadius(d) + labelSize + tagFontSize + 5)
         .attr("pointer-events", "none")
         .attr("class", "node-label");
     }
@@ -924,6 +928,7 @@ export default function KnowledgeGraph() {
     textFadeThreshold,
     nodeSize,
     linkThickness,
+    labelSize,
     centerStrength,
     repelStrength,
     linkStrength,
@@ -1017,6 +1022,7 @@ export default function KnowledgeGraph() {
     setNodeSize(DEFAULT_DISPLAY.nodeSize);
     setLinkThickness(DEFAULT_DISPLAY.linkThickness);
     setTextFadeThreshold(DEFAULT_DISPLAY.textFadeThreshold);
+    setLabelSize(DEFAULT_DISPLAY.labelSize);
     setShowArrows(DEFAULT_DISPLAY.showArrows);
     setShowTags(DEFAULT_DISPLAY.showTags);
     setShowOrphans(DEFAULT_DISPLAY.showOrphans);
@@ -1443,6 +1449,31 @@ export default function KnowledgeGraph() {
               <span>矢印</span>
               <input type="checkbox" checked={showArrows} onChange={(e) => setShowArrows(e.target.checked)} className="accent-primary" />
             </label>
+
+            <div className="space-y-1">
+              <span className="text-[10px] text-muted-foreground">文字サイズ</span>
+              <div className="flex gap-1">
+                {[
+                  { label: "非表示", value: 0 },
+                  { label: "小", value: 6 },
+                  { label: "中", value: 9 },
+                  { label: "大", value: 13 },
+                  { label: "特大", value: 18 },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setLabelSize(opt.value)}
+                    className={`flex-1 text-[10px] py-1 rounded transition-colors ${
+                      labelSize === opt.value
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-muted-foreground">
