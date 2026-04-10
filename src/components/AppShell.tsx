@@ -43,18 +43,20 @@ function RecordButton() {
 
 function BottomNav() {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 z-50">
-      <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
-        <NavItem href="/" icon="graph" labelKey="nav.graph" />
-        <NavItem href="/list" icon="list" labelKey="nav.list" />
-        <RecordButton />
-        <NavItem href="/thinking" icon="thinking" labelKey="nav.thinking" />
-        <NavItem href="/insights" icon="insight" labelKey="nav.insights" />
-      </div>
-      <div className="absolute top-2 right-2">
+    <>
+      <div className="fixed bottom-[108px] right-2 z-50">
         <LanguageToggle />
       </div>
-    </nav>
+      <nav className="fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur border-t border-gray-800 z-50">
+        <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
+          <NavItem href="/" icon="graph" labelKey="nav.graph" />
+          <NavItem href="/list" icon="list" labelKey="nav.list" />
+          <RecordButton />
+          <NavItem href="/thinking" icon="thinking" labelKey="nav.thinking" />
+          <NavItem href="/insights" icon="insight" labelKey="nav.insights" />
+        </div>
+      </nav>
+    </>
   );
 }
 
