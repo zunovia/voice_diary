@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,15 @@ const DOMAIN_COLORS: Record<string, string> = {
   アクション: "text-orange-400 bg-orange-500/10 border-orange-500/20",
 };
 
+const DOMAIN_KEYS: Record<string, string> = {
+  ビジネス: "cat.business",
+  技術: "cat.tech",
+  思想: "cat.thought",
+  アクション: "cat.action",
+};
+
 export default function InsightsPage() {
+  const { t } = useI18n();
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
@@ -57,9 +66,9 @@ export default function InsightsPage() {
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-6">
       <div>
-        <h1 className="text-lg font-bold">インサイト分析</h1>
+        <h1 className="text-lg font-bold">{t("insights.title")}</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          AIがメモ間の接続を見つけ、アイデアの種を生成します
+          {t("insights.subtitle")}
         </p>
       </div>
 
@@ -75,10 +84,10 @@ export default function InsightsPage() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            AIが分析中...
+            {t("insights.analyzing")}
           </span>
         ) : (
-          "メモを分析してインサイトを生成"
+          t("insights.analyze")
         )}
       </Button>
 
@@ -91,7 +100,7 @@ export default function InsightsPage() {
       )}
 
       {loading ? (
-        <div className="text-center text-muted-foreground py-12">読み込み中...</div>
+        <div className="text-center text-muted-foreground py-12">{t("common.loading")}</div>
       ) : insights.length === 0 ? (
         <Card className="text-center py-12">
           <CardContent className="space-y-3">
@@ -109,16 +118,16 @@ export default function InsightsPage() {
               />
             </svg>
             <p className="text-muted-foreground text-sm">
-              まだインサイトがありません
+              {t("insights.none")}
             </p>
             <p className="text-muted-foreground/60 text-xs">
-              上のボタンを押してメモの接続分析を実行してください
+              {t("insights.noneHint")}
             </p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">{insights.length}件のインサイト</p>
+          <p className="text-xs text-muted-foreground">{insights.length}{t("insights.count")}</p>
           {insights.map((insight) => (
             <Card
               key={insight.id}
@@ -130,10 +139,10 @@ export default function InsightsPage() {
                     variant="outline"
                     className={DOMAIN_COLORS[insight.domain || ""] || ""}
                   >
-                    {insight.domain || "その他"}
+                    {DOMAIN_KEYS[insight.domain || ""] ? t(DOMAIN_KEYS[insight.domain || ""] as Parameters<typeof t>[0]) : (insight.domain || t("cat.other"))}
                   </Badge>
                   <span className="text-[10px] text-muted-foreground">
-                    {insight.memo_ids?.length || 0}件のメモから
+                    {insight.memo_ids?.length || 0}{t("insights.fromMemos")}
                   </span>
                   <span className="text-[10px] text-muted-foreground ml-auto">
                     {new Date(insight.created_at).toLocaleDateString("ja-JP")}

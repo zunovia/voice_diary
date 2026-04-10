@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useI18n } from "@/lib/i18n";
 
 export default function StorageIndicator({ compact = false }: { compact?: boolean }) {
+  const { t } = useI18n();
   const [usage, setUsage] = useState<{ used_mb: number; limit_mb: number } | null>(null);
 
   useEffect(() => {
@@ -39,7 +41,7 @@ export default function StorageIndicator({ compact = false }: { compact?: boolea
   return (
     <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
       <div className="flex justify-between text-sm mb-2">
-        <span className="text-gray-400">Supabase 使用量</span>
+        <span className="text-gray-400">{t("storage.title")}</span>
         <span className="text-gray-300">
           {usage.used_mb.toFixed(1)} / {usage.limit_mb} MB
         </span>
@@ -51,9 +53,9 @@ export default function StorageIndicator({ compact = false }: { compact?: boolea
         />
       </div>
       <div className="flex justify-between items-center mt-1">
-        <p className="text-xs text-gray-500">{percent.toFixed(1)}% 使用中</p>
+        <p className="text-xs text-gray-500">{percent.toFixed(1)}% {t("storage.used")}</p>
         <a href="/usage" className="text-xs text-indigo-400 hover:text-indigo-300">
-          API使用量 &rarr;
+          {t("storage.apiUsage")}
         </a>
       </div>
     </div>

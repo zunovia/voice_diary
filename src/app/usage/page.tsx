@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ type AggregateData = {
 };
 
 export default function UsagePage() {
+  const { t } = useI18n();
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -56,7 +58,7 @@ export default function UsagePage() {
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-4">
-        <div className="text-center text-muted-foreground py-12">読み込み中...</div>
+        <div className="text-center text-muted-foreground py-12">{t("common.loading")}</div>
       </div>
     );
   }
@@ -64,7 +66,7 @@ export default function UsagePage() {
   if (!usage) {
     return (
       <div className="max-w-2xl mx-auto p-4">
-        <div className="text-center text-muted-foreground py-12">データを取得できませんでした</div>
+        <div className="text-center text-muted-foreground py-12">{t("usage.fetchError")}</div>
       </div>
     );
   }
@@ -74,9 +76,9 @@ export default function UsagePage() {
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">API使用量・料金</h1>
+        <h1 className="text-lg font-bold">{t("usage.title")}</h1>
         <a href="/">
-          <Button variant="ghost" size="sm">&larr; 戻る</Button>
+          <Button variant="ghost" size="sm">&larr; {t("common.back")}</Button>
         </a>
       </div>
 
@@ -85,7 +87,7 @@ export default function UsagePage() {
         <Card>
           <CardHeader className="pb-1">
             <CardTitle className="text-[10px] text-muted-foreground uppercase tracking-wider">
-              今日のコスト
+              {t("usage.todayCost")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -96,7 +98,7 @@ export default function UsagePage() {
               {formatYen(usage.today.totalCost)}
             </div>
             <div className="text-[10px] text-muted-foreground mt-1">
-              {usage.today.requestCount} リクエスト
+              {usage.today.requestCount} {t("usage.todayRequests")}
             </div>
           </CardContent>
         </Card>
@@ -104,7 +106,7 @@ export default function UsagePage() {
         <Card>
           <CardHeader className="pb-1">
             <CardTitle className="text-[10px] text-muted-foreground uppercase tracking-wider">
-              今月のコスト
+              {t("usage.monthCost")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -115,7 +117,7 @@ export default function UsagePage() {
               {formatYen(usage.month.totalCost)}
             </div>
             <div className="text-[10px] text-muted-foreground mt-1">
-              {usage.month.requestCount} リクエスト
+              {usage.month.requestCount} {t("usage.monthRequests")}
             </div>
           </CardContent>
         </Card>
@@ -123,7 +125,7 @@ export default function UsagePage() {
         <Card>
           <CardHeader className="pb-1">
             <CardTitle className="text-[10px] text-muted-foreground uppercase tracking-wider">
-              今日のトークン
+              {t("usage.todayTokens")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -131,7 +133,7 @@ export default function UsagePage() {
               {formatTokens(usage.today.totalInputTokens + usage.today.totalOutputTokens)}
             </div>
             <div className="text-[10px] text-muted-foreground">
-              入力 {formatTokens(usage.today.totalInputTokens)} / 出力 {formatTokens(usage.today.totalOutputTokens)}
+              {t("usage.input")} {formatTokens(usage.today.totalInputTokens)} / {t("usage.output")} {formatTokens(usage.today.totalOutputTokens)}
             </div>
           </CardContent>
         </Card>
@@ -139,7 +141,7 @@ export default function UsagePage() {
         <Card>
           <CardHeader className="pb-1">
             <CardTitle className="text-[10px] text-muted-foreground uppercase tracking-wider">
-              今月のトークン
+              {t("usage.monthTokens")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -147,7 +149,7 @@ export default function UsagePage() {
               {formatTokens(usage.month.totalInputTokens + usage.month.totalOutputTokens)}
             </div>
             <div className="text-[10px] text-muted-foreground">
-              入力 {formatTokens(usage.month.totalInputTokens)} / 出力 {formatTokens(usage.month.totalOutputTokens)}
+              {t("usage.input")} {formatTokens(usage.month.totalInputTokens)} / {t("usage.output")} {formatTokens(usage.month.totalOutputTokens)}
             </div>
           </CardContent>
         </Card>
@@ -157,7 +159,7 @@ export default function UsagePage() {
       {usage.daily.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">日別コスト推移</CardTitle>
+            <CardTitle className="text-sm">{t("usage.dailyChart")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-end gap-1 h-32">
@@ -185,11 +187,11 @@ export default function UsagePage() {
       {/* Model Breakdown */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">モデル別内訳（今月）</CardTitle>
+          <CardTitle className="text-sm">{t("usage.modelBreakdown")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {Object.entries(usage.month.byModel).length === 0 ? (
-            <p className="text-sm text-muted-foreground">まだ使用データがありません</p>
+            <p className="text-sm text-muted-foreground">{t("usage.noData")}</p>
           ) : (
             Object.entries(usage.month.byModel).map(([model, data]) => (
               <div
@@ -201,7 +203,7 @@ export default function UsagePage() {
                     {model}
                   </Badge>
                   <div className="text-[10px] text-muted-foreground mt-1">
-                    {data.requests}回 | 入力 {formatTokens(data.inputTokens)} / 出力{" "}
+                    {data.requests}{t("usage.times")} | {t("usage.input")} {formatTokens(data.inputTokens)} / {t("usage.output")}{" "}
                     {formatTokens(data.outputTokens)}
                   </div>
                 </div>
@@ -218,7 +220,7 @@ export default function UsagePage() {
       </Card>
 
       <p className="text-[10px] text-muted-foreground text-center">
-        コストはトークン数からの推定値です。実際の請求額とは多少異なる場合があります。
+        {t("usage.costNote")}
       </p>
     </div>
   );

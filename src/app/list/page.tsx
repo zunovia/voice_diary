@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useI18n } from "@/lib/i18n";
 import StorageIndicator from "@/components/StorageIndicator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +27,15 @@ const CATEGORY_VARIANTS: Record<
   生活: "destructive",
 };
 
+const CATEGORY_KEYS: Record<string, string> = {
+  ビジネス: "cat.business",
+  技術: "cat.tech",
+  思想: "cat.thought",
+  生活: "cat.life",
+};
+
 export default function ListPage() {
+  const { t } = useI18n();
   const [memos, setMemos] = useState<Memo[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterCategory, setFilterCategory] = useState<string>("");
@@ -57,14 +66,14 @@ export default function ListPage() {
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold">メモ一覧</h1>
-        <span className="text-xs text-muted-foreground">{filtered.length}件</span>
+        <h1 className="text-lg font-bold">{t("list.title")}</h1>
+        <span className="text-xs text-muted-foreground">{filtered.length}{t("common.items")}</span>
       </div>
 
       <StorageIndicator />
 
       <Input
-        placeholder="メモを検索..."
+        placeholder={t("list.search")}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="bg-card"
@@ -78,7 +87,7 @@ export default function ListPage() {
           onClick={() => setFilterCategory("")}
           className="text-xs h-7"
         >
-          すべて
+          {t("common.all")}
         </Button>
         {categories.map((cat) => (
           <Button
@@ -88,19 +97,19 @@ export default function ListPage() {
             onClick={() => setFilterCategory(cat || "")}
             className="text-xs h-7"
           >
-            {cat}
+            {CATEGORY_KEYS[cat!] ? t(CATEGORY_KEYS[cat!] as Parameters<typeof t>[0]) : cat}
           </Button>
         ))}
       </div>
 
       {/* Memo List */}
       {loading ? (
-        <div className="text-center text-muted-foreground py-12">読み込み中...</div>
+        <div className="text-center text-muted-foreground py-12">{t("common.loading")}</div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 space-y-4">
-          <p className="text-muted-foreground">メモがありません</p>
+          <p className="text-muted-foreground">{t("common.noMemos")}</p>
           <a href="/record">
-            <Button>最初のメモを録音する</Button>
+            <Button>{t("common.recordFirst")}</Button>
           </a>
         </div>
       ) : (
@@ -112,7 +121,7 @@ export default function ListPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <h3 className="text-sm font-medium truncate">
-                        {memo.title || "無題"}
+                        {memo.title || t("common.untitled")}
                       </h3>
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                         {memo.summary}
@@ -125,7 +134,7 @@ export default function ListPage() {
                         }
                         className="text-[10px] shrink-0"
                       >
-                        {memo.category}
+                        {CATEGORY_KEYS[memo.category] ? t(CATEGORY_KEYS[memo.category] as Parameters<typeof t>[0]) : memo.category}
                       </Badge>
                     )}
                   </div>

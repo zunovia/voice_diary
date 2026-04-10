@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { useI18n } from "@/lib/i18n";
 
 type RecorderState = "idle" | "recording" | "transcribing" | "processing" | "done";
 
 export default function VoiceRecorder() {
+  const { t } = useI18n();
   const [state, setState] = useState<RecorderState>("idle");
   const [transcription, setTranscription] = useState("");
   const [liveLevel, setLiveLevel] = useState(0);
@@ -36,7 +38,6 @@ export default function VoiceRecorder() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      // Audio level visualization
       const audioCtx = new AudioContext();
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
@@ -54,7 +55,6 @@ export default function VoiceRecorder() {
       };
       updateLevel();
 
-      // MediaRecorder
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
           ? "audio/webm;codecs=opus"
@@ -66,19 +66,18 @@ export default function VoiceRecorder() {
       };
 
       mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start(1000); // collect data every second
+      mediaRecorder.start(1000);
       setState("recording");
 
       timerRef.current = setInterval(() => {
         setDuration((d) => d + 1);
       }, 1000);
     } catch {
-      setError("マイクへのアクセスが許可されませんでした");
+      setError(t("record.micError"));
     }
-  }, []);
+  }, [t]);
 
   const stopRecording = useCallback(async () => {
-    // Stop level visualization
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
@@ -97,7 +96,6 @@ export default function VoiceRecorder() {
       return;
     }
 
-    // Wait for final data
     const audioBlob = await new Promise<Blob>((resolve) => {
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType });
@@ -106,20 +104,18 @@ export default function VoiceRecorder() {
       mediaRecorder.stop();
     });
 
-    // Stop microphone
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current.getTracks().forEach((tr) => tr.stop());
       streamRef.current = null;
     }
     mediaRecorderRef.current = null;
 
     if (audioBlob.size < 1000) {
-      setError("音声が短すぎます。もう一度お試しください。");
+      setError(t("record.tooShort"));
       setState("idle");
       return;
     }
 
-    // Step 1: Transcribe via Groq Whisper + Gemini cleanup
     setState("transcribing");
     try {
       const formData = new FormData();
@@ -130,18 +126,17 @@ export default function VoiceRecorder() {
         body: formData,
       });
       const transcribeData = await transcribeRes.json();
-      if (!transcribeRes.ok) throw new Error(transcribeData.error || "文字起こしに失敗しました");
+      if (!transcribeRes.ok) throw new Error(transcribeData.error || t("record.transcribeError"));
 
       const text = transcribeData.text;
       setTranscription(text);
 
       if (!text.trim()) {
-        setError("音声を認識できませんでした。もう一度お試しください。");
+        setError(t("record.noSpeech"));
         setState("idle");
         return;
       }
 
-      // Step 2: Summarize & Save
       setState("processing");
       const summarizeRes = await fetch("/api/summarize", {
         method: "POST",
@@ -149,15 +144,15 @@ export default function VoiceRecorder() {
         body: JSON.stringify({ text }),
       });
       const summarizeData = await summarizeRes.json();
-      if (!summarizeRes.ok) throw new Error(summarizeData.error || "要約・保存に失敗しました");
+      if (!summarizeRes.ok) throw new Error(summarizeData.error || t("record.summarizeError"));
 
       setSummary(summarizeData);
       setState("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "エラーが発生しました");
+      setError(err instanceof Error ? err.message : t("common.error"));
       setState("idle");
     }
-  }, []);
+  }, [t]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -178,12 +173,10 @@ export default function VoiceRecorder() {
 
   return (
     <div className="flex flex-col items-center gap-6 p-6">
-      {/* Recording Button */}
       <div className="relative">
         {state === "recording" && (
           <>
             <div className="absolute inset-0 rounded-full bg-red-500/20 animate-ping" />
-            {/* Audio level ring */}
             <div
               className="absolute inset-0 rounded-full border-4 border-red-400 transition-transform duration-100"
               style={{ transform: `scale(${1 + liveLevel * 0.4})`, opacity: 0.3 + liveLevel * 0.7 }}
@@ -219,28 +212,24 @@ export default function VoiceRecorder() {
         </button>
       </div>
 
-      {/* Duration */}
       {state === "recording" && (
         <div className="text-3xl font-mono text-red-400">{formatTime(duration)}</div>
       )}
 
-      {/* Status text */}
       <p className="text-gray-400 text-sm">
-        {state === "idle" && "タップして録音開始"}
-        {state === "recording" && "録音中... タップで停止"}
-        {state === "transcribing" && "Whisper AIが文字起こし中..."}
-        {state === "processing" && "AIが分析・保存中..."}
-        {state === "done" && "保存完了!"}
+        {state === "idle" && t("record.tapToStart")}
+        {state === "recording" && t("record.recording")}
+        {state === "transcribing" && t("record.transcribing")}
+        {state === "processing" && t("record.processing")}
+        {state === "done" && t("record.done")}
       </p>
 
-      {/* Error */}
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 w-full max-w-md">
           <p className="text-red-400 text-sm">{error}</p>
         </div>
       )}
 
-      {/* Result */}
       {summary && (
         <div className="bg-gray-800/50 rounded-xl p-6 w-full max-w-md space-y-4 border border-gray-700/50">
           <h3 className="text-lg font-bold text-white">{summary.title}</h3>
@@ -252,23 +241,20 @@ export default function VoiceRecorder() {
           <p className="text-gray-300 text-sm">{summary.summary}</p>
           <div className="flex flex-wrap gap-2">
             {summary.tags.map((tag) => (
-              <span
-                key={tag}
-                className="px-2 py-1 bg-indigo-500/10 text-indigo-300 rounded text-xs"
-              >
+              <span key={tag} className="px-2 py-1 bg-indigo-500/10 text-indigo-300 rounded text-xs">
                 #{tag}
               </span>
             ))}
           </div>
           <details className="text-gray-500 text-xs">
-            <summary className="cursor-pointer hover:text-gray-300">原文を表示</summary>
+            <summary className="cursor-pointer hover:text-gray-300">{t("record.showOriginal")}</summary>
             <p className="mt-2 whitespace-pre-wrap">{transcription}</p>
           </details>
           <a
             href="/"
             className="block text-center bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-lg transition-colors"
           >
-            グラフに戻る
+            {t("record.backToGraph")}
           </a>
         </div>
       )}

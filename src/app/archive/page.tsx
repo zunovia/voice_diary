@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useI18n } from "@/lib/i18n";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -11,6 +12,7 @@ type MonthData = {
 };
 
 export default function ArchivePage() {
+  const { t } = useI18n();
   const [months, setMonths] = useState<MonthData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,23 +43,18 @@ export default function ArchivePage() {
       .catch(() => setLoading(false));
   }, []);
 
-  const monthNames = [
-    "", "1月", "2月", "3月", "4月", "5月", "6月",
-    "7月", "8月", "9月", "10月", "11月", "12月",
-  ];
-
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4">
-      <h1 className="text-lg font-bold">月別アーカイブ</h1>
+      <h1 className="text-lg font-bold">{t("archive.title")}</h1>
 
       {loading ? (
-        <div className="text-center text-muted-foreground py-12">読み込み中...</div>
+        <div className="text-center text-muted-foreground py-12">{t("common.loading")}</div>
       ) : months.length === 0 ? (
         <Card className="text-center py-12">
           <CardContent className="space-y-4">
-            <p className="text-muted-foreground">メモがありません</p>
+            <p className="text-muted-foreground">{t("common.noMemos")}</p>
             <a href="/record">
-              <Button>最初のメモを録音する</Button>
+              <Button>{t("common.recordFirst")}</Button>
             </a>
           </CardContent>
         </Card>
@@ -68,12 +65,12 @@ export default function ArchivePage() {
               <Card className="hover:bg-accent/50 transition-colors cursor-pointer group">
                 <CardContent className="p-4">
                   <div className="text-2xl font-bold group-hover:text-primary transition-colors">
-                    {monthNames[m.month]}
+                    {t(`month.${m.month}` as Parameters<typeof t>[0])}
                   </div>
-                  <div className="text-xs text-muted-foreground">{m.year}年</div>
+                  <div className="text-xs text-muted-foreground">{m.year}{t("archive.year")}</div>
                   <div className="mt-2 text-sm text-muted-foreground">
                     <span className="text-primary font-medium">{m.count}</span>{" "}
-                    件のメモ
+                    {t("archive.memoCount")}
                   </div>
                 </CardContent>
               </Card>

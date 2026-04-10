@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useI18n } from "@/lib/i18n";
 
 // --- Types ---
 type GraphNode = {
@@ -89,6 +90,7 @@ const DEFAULT_DISPLAY = {
 };
 
 export default function KnowledgeGraph() {
+  const { t } = useI18n();
   const svgRef = useRef<SVGSVGElement>(null);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphLink> | null>(null);
 
@@ -1051,7 +1053,7 @@ export default function KnowledgeGraph() {
         body: JSON.stringify({ memoIdA: nodeA.id, memoIdB: nodeB.id }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "融合に失敗しました");
+      if (!res.ok) throw new Error(data.error || "Fusion failed");
 
       const fusion = data.fusion;
       // Add the new fusion node to the graph at the midpoint of the two parents
@@ -1091,7 +1093,7 @@ export default function KnowledgeGraph() {
       };
     } catch (err) {
       console.error("Fusion error:", err);
-      alert(err instanceof Error ? err.message : "融合に失敗しました");
+      alert(err instanceof Error ? err.message : "Fusion failed");
     } finally {
       setFusionLoading(false);
       setFusionPreview(null);
@@ -1100,7 +1102,7 @@ export default function KnowledgeGraph() {
 
   // --- Delete fusion node ---
   const deleteFusion = async (fusionId: string) => {
-    if (!confirm("この融合ノードを削除しますか？")) return;
+    if (!confirm("Delete this fusion node?")) return;
     try {
       const res = await fetch("/api/fuse", {
         method: "DELETE",
@@ -1143,7 +1145,7 @@ export default function KnowledgeGraph() {
       <div className="flex-1 relative">
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-muted-foreground text-sm">読み込み中...</div>
+            <div className="text-muted-foreground text-sm">{t("common.loading")}</div>
           </div>
         ) : graphData.nodes.length === 0 && !isAnimating ? (
           <div className="flex flex-col items-center justify-center h-full gap-4">
@@ -1151,9 +1153,9 @@ export default function KnowledgeGraph() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
             </svg>
-            <p className="text-muted-foreground">メモがありません</p>
+            <p className="text-muted-foreground">{t("common.noMemos")}</p>
             <a href="/record">
-              <Button>最初のメモを録音する</Button>
+              <Button>{t("common.recordFirst")}</Button>
             </a>
           </div>
         ) : (
@@ -1163,7 +1165,7 @@ export default function KnowledgeGraph() {
         {/* Top-left: search + quick filters */}
         <div className="absolute top-3 left-3 flex flex-col gap-2 max-w-[240px]">
           <Input
-            placeholder="検索... (tag: category:)"
+            placeholder={t("graph.search")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="bg-card/90 backdrop-blur text-xs h-8"
@@ -1193,7 +1195,7 @@ export default function KnowledgeGraph() {
                 className="text-[10px] cursor-pointer text-red-400"
                 onClick={() => setSelectedGroups([])}
               >
-                クリア
+                {t("common.clear")}
               </Badge>
             )}
           </div>
@@ -1203,11 +1205,11 @@ export default function KnowledgeGraph() {
         <div className="absolute top-3 right-3 flex gap-2">
           {isAnimating ? (
             <Button size="sm" variant="outline" onClick={stopAnimation} className="h-8 text-xs">
-              停止
+              {t("graph.stop")}
             </Button>
           ) : (
             <Button size="sm" variant="outline" onClick={startAnimation} className="h-8 text-xs">
-              アニメーション
+              {t("graph.animation")}
             </Button>
           )}
           <Button
@@ -1225,12 +1227,12 @@ export default function KnowledgeGraph() {
 
         {/* Bottom-left: stats */}
         <div className="absolute bottom-3 left-3 text-[10px] text-muted-foreground bg-card/80 backdrop-blur rounded px-2 py-1">
-          {filteredData().nodes.filter((n) => !n.isFusion).length} ノード / {filteredData().links.length} 接続
+          {filteredData().nodes.filter((n) => !n.isFusion).length} {t("graph.nodes")} / {filteredData().links.length} {t("graph.connections")}
           {graphData.nodes.filter((n) => n.isFusion).length > 0 && (
-            <span className="text-amber-400"> / {graphData.nodes.filter((n) => n.isFusion).length} 融合</span>
+            <span className="text-amber-400"> / {graphData.nodes.filter((n) => n.isFusion).length} {t("graph.fusions")}</span>
           )}
           {graphData.insightLinks.length > 0 && (
-            <span className="text-violet-400"> / {graphData.insightLinks.length} インサイト</span>
+            <span className="text-violet-400"> / {graphData.insightLinks.length} {t("graph.insights")}</span>
           )}
         </div>
 
@@ -1255,7 +1257,7 @@ export default function KnowledgeGraph() {
             <div className="flex items-center gap-2 mb-1">
               <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: DOMAIN_COLORS[hoveredInsight.domain] || "#a855f7" }} />
               <span className="text-[10px] font-medium" style={{ color: DOMAIN_COLORS[hoveredInsight.domain] || "#a855f7" }}>
-                {hoveredInsight.domain} インサイト
+                {hoveredInsight.domain} {t("graph.insights")}
               </span>
             </div>
             <p className="text-xs">{hoveredInsight.insight}</p>
@@ -1269,7 +1271,7 @@ export default function KnowledgeGraph() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              新しいインサイト接続を発見しました
+              {t("graph.insightDiscovery")}
             </p>
           </div>
         )}
@@ -1294,10 +1296,10 @@ export default function KnowledgeGraph() {
                   style={{ backgroundColor: `hsl(${30 + selectedIgnition.temperature * 30}, 100%, 60%)` }}
                 />
                 <span className="text-[10px] text-muted-foreground">
-                  発火温度: {Math.round(selectedIgnition.temperature * 100)}%
+                  {t("graph.ignitionTemp")}: {Math.round(selectedIgnition.temperature * 100)}%
                 </span>
                 <span className="text-[10px] text-muted-foreground ml-auto">
-                  {selectedIgnition.density}本の接続が衝突
+                  {selectedIgnition.density}{t("graph.collisions")}
                 </span>
               </div>
 
@@ -1335,14 +1337,14 @@ export default function KnowledgeGraph() {
                 href={`/record?prompt=${encodeURIComponent(selectedIgnition.question)}`}
                 className="block w-full text-center py-3 rounded-xl text-sm font-medium transition-all bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-white shadow-lg"
               >
-                この問いに答えて新しいメモを生む
+                {t("graph.answerQuestion")}
               </a>
 
               <button
                 onClick={() => setSelectedIgnition(null)}
                 className="block w-full text-center text-xs text-muted-foreground hover:text-foreground"
               >
-                閉じる
+                {t("common.close")}
               </button>
             </div>
           </div>
@@ -1359,9 +1361,9 @@ export default function KnowledgeGraph() {
             >
               <div className="text-center">
                 <div className="text-2xl mb-2">⚡</div>
-                <h3 className="font-bold text-sm">ノード融合</h3>
+                <h3 className="font-bold text-sm">{t("graph.fusionTitle")}</h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  2つのメモをAIが融合し、新しいアイデアを生成します
+                  {t("graph.fusionDesc")}
                 </p>
               </div>
 
@@ -1381,7 +1383,7 @@ export default function KnowledgeGraph() {
                   disabled={fusionLoading}
                   className="flex-1 py-2.5 rounded-xl text-xs border border-border hover:bg-muted transition-colors disabled:opacity-50"
                 >
-                  キャンセル
+                  {t("common.cancel")}
                 </button>
                 <button
                   onClick={() => executeFusion(fusionPreview.nodeA, fusionPreview.nodeB)}
@@ -1391,10 +1393,10 @@ export default function KnowledgeGraph() {
                   {fusionLoading ? (
                     <span className="flex items-center justify-center gap-1">
                       <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      融合中...
+                      {t("graph.fusing")}
                     </span>
                   ) : (
-                    "融合する"
+                    t("graph.fuse")
                   )}
                 </button>
               </div>
@@ -1407,33 +1409,33 @@ export default function KnowledgeGraph() {
       {settingsOpen && !selectedMemo && !selectedIgnition && (
         <div className="w-64 bg-card border-l border-border overflow-y-auto p-4 space-y-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">設定</h3>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t("settings.title")}</h3>
             <Button size="sm" variant="ghost" onClick={resetForces} className="h-6 text-[10px]">
-              リセット
+              {t("common.reset")}
             </Button>
           </div>
 
           {/* FILTERS */}
           <div className="space-y-3">
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">フィルター</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("settings.filters")}</h4>
             <label className="flex items-center justify-between text-xs">
-              <span>タグ表示</span>
+              <span>{t("settings.showTags")}</span>
               <input type="checkbox" checked={showTags} onChange={(e) => setShowTags(e.target.checked)} className="accent-primary" />
             </label>
             <label className="flex items-center justify-between text-xs">
-              <span>孤立ノード</span>
+              <span>{t("settings.orphanNodes")}</span>
               <input type="checkbox" checked={showOrphans} onChange={(e) => setShowOrphans(e.target.checked)} className="accent-primary" />
             </label>
             <label className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-1">
-                インサイト接続
+                {t("settings.insightLinks")}
                 <span className="text-[9px] text-violet-400">({graphData.insightLinks.length})</span>
               </span>
               <input type="checkbox" checked={showInsights} onChange={(e) => setShowInsights(e.target.checked)} className="accent-violet-500" />
             </label>
             <label className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-1">
-                発火ポイント
+                {t("settings.ignitionPoints")}
                 <span className="text-[9px] text-orange-400">({ignitions.length})</span>
               </span>
               <input type="checkbox" checked={showIgnitions} onChange={(e) => setShowIgnitions(e.target.checked)} className="accent-orange-500" />
@@ -1444,21 +1446,21 @@ export default function KnowledgeGraph() {
 
           {/* DISPLAY */}
           <div className="space-y-3">
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">表示</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("settings.display")}</h4>
             <label className="flex items-center justify-between text-xs">
-              <span>矢印</span>
+              <span>{t("settings.arrows")}</span>
               <input type="checkbox" checked={showArrows} onChange={(e) => setShowArrows(e.target.checked)} className="accent-primary" />
             </label>
 
             <div className="space-y-1">
-              <span className="text-[10px] text-muted-foreground">文字サイズ</span>
+              <span className="text-[10px] text-muted-foreground">{t("settings.labelSize")}</span>
               <div className="flex gap-1">
                 {[
-                  { label: "非表示", value: 0 },
-                  { label: "小", value: 6 },
-                  { label: "中", value: 9 },
-                  { label: "大", value: 13 },
-                  { label: "特大", value: 18 },
+                  { label: t("settings.labelHidden"), value: 0 },
+                  { label: t("settings.labelS"), value: 6 },
+                  { label: t("settings.labelM"), value: 9 },
+                  { label: t("settings.labelL"), value: 13 },
+                  { label: t("settings.labelXL"), value: 18 },
                 ].map((opt) => (
                   <button
                     key={opt.value}
@@ -1477,7 +1479,7 @@ export default function KnowledgeGraph() {
 
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>テキスト表示閾値</span>
+                <span>{t("settings.textThreshold")}</span>
                 <span>{textFadeThreshold.toFixed(2)}</span>
               </div>
               <Slider value={[textFadeThreshold]} onValueChange={(v) => setTextFadeThreshold(Array.isArray(v) ? v[0] : v)} min={0.1} max={3} step={0.1} />
@@ -1485,7 +1487,7 @@ export default function KnowledgeGraph() {
 
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>ノードサイズ</span>
+                <span>{t("settings.nodeSize")}</span>
                 <span>{nodeSize}</span>
               </div>
               <Slider value={[nodeSize]} onValueChange={(v) => setNodeSize(Array.isArray(v) ? v[0] : v)} min={1} max={15} step={0.5} />
@@ -1493,7 +1495,7 @@ export default function KnowledgeGraph() {
 
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>リンクの太さ</span>
+                <span>{t("settings.linkWidth")}</span>
                 <span>{linkThickness}</span>
               </div>
               <Slider value={[linkThickness]} onValueChange={(v) => setLinkThickness(Array.isArray(v) ? v[0] : v)} min={0.2} max={5} step={0.2} />
@@ -1504,11 +1506,11 @@ export default function KnowledgeGraph() {
 
           {/* FORCES */}
           <div className="space-y-3">
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">フォース</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("settings.forces")}</h4>
 
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>中心引力</span>
+                <span>{t("settings.centerForce")}</span>
                 <span>{centerStrength.toFixed(2)}</span>
               </div>
               <Slider value={[centerStrength]} onValueChange={(v) => setCenterStrength(Array.isArray(v) ? v[0] : v)} min={0} max={1} step={0.02} />
@@ -1516,7 +1518,7 @@ export default function KnowledgeGraph() {
 
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>反発力</span>
+                <span>{t("settings.repelForce")}</span>
                 <span>{repelStrength.toFixed(1)}</span>
               </div>
               <Slider value={[repelStrength]} onValueChange={(v) => setRepelStrength(Array.isArray(v) ? v[0] : v)} min={0} max={50} step={0.5} />
@@ -1524,7 +1526,7 @@ export default function KnowledgeGraph() {
 
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>リンク引力</span>
+                <span>{t("settings.linkForce")}</span>
                 <span>{linkStrength.toFixed(2)}</span>
               </div>
               <Slider value={[linkStrength]} onValueChange={(v) => setLinkStrength(Array.isArray(v) ? v[0] : v)} min={0} max={1} step={0.02} />
@@ -1532,7 +1534,7 @@ export default function KnowledgeGraph() {
 
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>リンク距離</span>
+                <span>{t("settings.linkDistance")}</span>
                 <span>{linkDistance}</span>
               </div>
               <Slider value={[linkDistance]} onValueChange={(v) => setLinkDistance(Array.isArray(v) ? v[0] : v)} min={10} max={500} step={5} />
@@ -1543,14 +1545,14 @@ export default function KnowledgeGraph() {
 
           {/* ROTATION */}
           <div className="space-y-3">
-            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">回転</h4>
+            <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("settings.rotation")}</h4>
             <label className="flex items-center justify-between text-xs">
-              <span>自動回転</span>
+              <span>{t("settings.autoRotate")}</span>
               <input type="checkbox" checked={isRotating} onChange={(e) => setIsRotating(e.target.checked)} className="accent-primary" />
             </label>
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>回転速度</span>
+                <span>{t("settings.rotateSpeed")}</span>
                 <span>{rotationSpeed.toFixed(2)}</span>
               </div>
               <Slider value={[rotationSpeed]} onValueChange={(v) => setRotationSpeed(Array.isArray(v) ? v[0] : v)} min={0} max={1} step={0.02} />
@@ -1562,9 +1564,9 @@ export default function KnowledgeGraph() {
           {/* COLOR GROUPS */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">グループ</h4>
+              <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t("settings.groups")}</h4>
               <Button size="sm" variant="ghost" onClick={addColorGroup} className="h-5 text-[10px] px-1">
-                + 追加
+                {t("settings.addGroup")}
               </Button>
             </div>
             {colorGroups.map((group, i) => (
@@ -1578,7 +1580,7 @@ export default function KnowledgeGraph() {
                 <Input
                   value={group.query}
                   onChange={(e) => updateColorGroup(i, "query", e.target.value)}
-                  placeholder="検索クエリ"
+                  placeholder={t("settings.searchQuery")}
                   className="h-6 text-[10px] flex-1"
                 />
                 <button
@@ -1614,14 +1616,14 @@ export default function KnowledgeGraph() {
               <div className="flex items-center gap-2">
                 {selectedMemo.isFusion && (
                   <Badge className="text-[9px] bg-amber-500/20 text-amber-400 border-amber-500/30">
-                    {selectedMemo.shape === "star" ? "⭐ 創造的融合" : selectedMemo.shape === "triangle" ? "🔺 技術的融合" : "💎 ビジネス融合"}
+                    {selectedMemo.shape === "star" ? "⭐ " + t("graph.fusionCreative") : selectedMemo.shape === "triangle" ? "🔺 " + t("graph.fusionTech") : "💎 " + t("graph.fusionBusiness")}
                   </Badge>
                 )}
                 <Badge style={{ backgroundColor: getNodeColor(selectedMemo) + "20", color: getNodeColor(selectedMemo) }}>
                   {selectedMemo.category}
                 </Badge>
                 <span className="text-[10px] text-muted-foreground">
-                  {selectedMemo.connectionCount || 0} 接続
+                  {selectedMemo.connectionCount || 0} {t("graph.connections")}
                 </span>
               </div>
 
@@ -1638,7 +1640,7 @@ export default function KnowledgeGraph() {
               {selectedMemo.isFusion && selectedMemo.parentMemoIds && (
                 <>
                   <Separator />
-                  <p className="text-[10px] text-muted-foreground font-medium">融合元メモ:</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">{t("graph.fusionParents")}</p>
                   <div className="space-y-1">
                     {selectedMemo.parentMemoIds.map((pid) => {
                       const parent = graphData.nodes.find((n) => n.id === pid);
@@ -1665,7 +1667,7 @@ export default function KnowledgeGraph() {
               {!selectedMemo.isFusion ? (
                 <a href={`/memo/${selectedMemo.id}`}>
                   <Button variant="outline" size="sm" className="w-full text-xs">
-                    詳細を見る
+                    {t("graph.viewDetail")}
                   </Button>
                 </a>
               ) : (
@@ -1676,7 +1678,7 @@ export default function KnowledgeGraph() {
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
-                  融合ノードを削除
+                  {t("graph.deleteFusion")}
                 </button>
               )}
             </CardContent>
