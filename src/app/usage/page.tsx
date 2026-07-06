@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -77,9 +78,9 @@ export default function UsagePage() {
     <div className="max-w-2xl mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">{t("usage.title")}</h1>
-        <a href="/">
+        <Link href="/">
           <Button variant="ghost" size="sm">&larr; {t("common.back")}</Button>
-        </a>
+        </Link>
       </div>
 
       {/* Summary Cards */}

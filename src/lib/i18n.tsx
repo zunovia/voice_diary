@@ -49,12 +49,21 @@ const translations = {
   "record.processing": { ja: "AIが分析・保存中...", en: "AI analyzing & saving..." },
   "record.done": { ja: "保存完了!", en: "Saved!" },
   "record.micError": { ja: "マイクへのアクセスが許可されませんでした", en: "Microphone access denied" },
+  "record.unsupportedError": { ja: "このブラウザは録音に対応していません。別のブラウザ（Chrome/Safari最新版）でお試しください。", en: "This browser does not support audio recording. Please try another browser (latest Chrome/Safari)." },
+  "record.micBusyError": { ja: "マイクを利用できません。他のアプリがマイクを使用中でないか確認してください。", en: "Microphone unavailable. Check that another app is not using it." },
   "record.tooShort": { ja: "音声が短すぎます。もう一度お試しください。", en: "Audio too short. Please try again." },
   "record.transcribeError": { ja: "文字起こしに失敗しました", en: "Transcription failed" },
   "record.noSpeech": { ja: "音声を認識できませんでした。もう一度お試しください。", en: "No speech detected. Please try again." },
   "record.summarizeError": { ja: "要約・保存に失敗しました", en: "Summary & save failed" },
   "record.showOriginal": { ja: "原文を表示", en: "Show original" },
   "record.backToGraph": { ja: "グラフに戻る", en: "Back to Graph" },
+
+  // === Login Page ===
+  "login.title": { ja: "Voice Diary Memo", en: "Voice Diary Memo" },
+  "login.description": { ja: "このアプリは保護されています。アクセスキーを入力してください。", en: "This app is protected. Please enter your access key." },
+  "login.placeholder": { ja: "アクセスキー", en: "Access key" },
+  "login.submit": { ja: "ログイン", en: "Log in" },
+  "login.error": { ja: "アクセスキーが正しくありません", en: "Incorrect access key" },
 
   // === List Page ===
   "list.title": { ja: "メモ一覧", en: "Memo List" },

@@ -78,22 +78,11 @@ ALTER TABLE public.insights ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.api_usage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fusions ENABLE ROW LEVEL SECURITY;
 
--- 9. アクセスポリシー（全操作許可 — 認証は将来追加）
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow all on memos') THEN
-    CREATE POLICY "Allow all on memos" ON public.memos FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow all on insights') THEN
-    CREATE POLICY "Allow all on insights" ON public.insights FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow all on api_usage') THEN
-    CREATE POLICY "Allow all on api_usage" ON public.api_usage FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'Allow all fusions') THEN
-    CREATE POLICY "Allow all fusions" ON public.fusions FOR ALL USING (true) WITH CHECK (true);
-  END IF;
-END $$;
+-- 9. アクセスポリシー
+-- ポリシーは意図的に作成しない（RLS有効・ポリシーなし = anon keyでは一切操作不可）。
+-- アプリのDBアクセスは全てサーバー側の service role key（RLSをバイパス）経由のため、
+-- ポリシーがなくてもアプリは正常に動作する。
+-- 過去バージョンの全許可ポリシーが残っている場合は supabase-migration-2-security.sql を実行すること。
 
 -- ============================================
 -- セットアップ完了！

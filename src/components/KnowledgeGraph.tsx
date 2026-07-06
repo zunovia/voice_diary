@@ -656,7 +656,10 @@ export default function KnowledgeGraph() {
         fusionTargetRef.current = null;
       });
 
+    // d3のSelection/DragBehaviorのジェネリクス相互運用のための意図的なany（ランタイム影響なし）
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (node as any).call(dragBehavior);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (fusionNode as any).call(dragBehavior);
 
     // Labels (hidden when labelSize is 0)

@@ -1,6 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { I18nProvider, useI18n, LanguageToggle } from "@/lib/i18n";
 
 function NavItem({ href, icon, labelKey }: { href: string; icon: string; labelKey: string }) {
@@ -61,10 +62,12 @@ function BottomNav() {
 }
 
 export default function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const isLogin = pathname === "/login";
   return (
     <I18nProvider>
-      <div className="flex-1 pb-20">{children}</div>
-      <BottomNav />
+      <div className={isLogin ? "flex-1" : "flex-1 pb-20"}>{children}</div>
+      {!isLogin && <BottomNav />}
     </I18nProvider>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
+import Link from "next/link";
 
 type Memo = {
   id: string;
@@ -63,9 +64,9 @@ export default function MonthArchivePage({
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4">
-      <a href="/archive" className="text-gray-500 hover:text-gray-300 text-sm">
+      <Link href="/archive" className="text-gray-500 hover:text-gray-300 text-sm">
         &larr; アーカイブに戻る
-      </a>
+      </Link>
 
       <h1 className="text-lg font-bold text-white">
         {year}年 {monthNames[parseInt(month)]}

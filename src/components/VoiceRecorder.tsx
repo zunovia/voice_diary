@@ -1,9 +1,30 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
 
 type RecorderState = "idle" | "recording" | "transcribing" | "processing" | "done";
+
+// iOS Safari (全iOSブラウザ) の MediaRecorder は webm 非対応・audio/mp4 のみのため、
+// 対応形式を順に探す。どれも非対応ならブラウザ既定に任せる
+const PREFERRED_MIME_TYPES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/mp4;codecs=mp4a.40.2",
+  "audio/mp4",
+];
+
+function pickSupportedMimeType(): string | undefined {
+  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return undefined;
+  return PREFERRED_MIME_TYPES.find((t) => MediaRecorder.isTypeSupported(t));
+}
+
+function extensionForMimeType(mimeType: string): string {
+  if (mimeType.includes("mp4")) return "mp4";
+  if (mimeType.includes("ogg")) return "ogg";
+  return "webm";
+}
 
 export default function VoiceRecorder() {
   const { t } = useI18n();
@@ -25,6 +46,7 @@ export default function VoiceRecorder() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
   const startRecording = useCallback(async () => {
     try {
@@ -39,6 +61,7 @@ export default function VoiceRecorder() {
       streamRef.current = stream;
 
       const audioCtx = new AudioContext();
+      audioCtxRef.current = audioCtx;
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
@@ -55,11 +78,10 @@ export default function VoiceRecorder() {
       };
       updateLevel();
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : "audio/webm",
-      });
+      const mimeType = pickSupportedMimeType();
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
@@ -72,8 +94,35 @@ export default function VoiceRecorder() {
       timerRef.current = setInterval(() => {
         setDuration((d) => d + 1);
       }, 1000);
-    } catch {
-      setError(t("record.micError"));
+    } catch (err) {
+      // 途中まで確保したリソースを解放（マイク占有・レベルメーターの残留を防ぐ）
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      analyserRef.current = null;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((tr) => tr.stop());
+        streamRef.current = null;
+      }
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current = null;
+      }
+      // 原因別にメッセージを出し分ける（権限拒否 / マイク利用不可 / 録音非対応）
+      const name = err instanceof DOMException ? err.name : "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        setError(t("record.micError"));
+      } else if (
+        name === "NotFoundError" ||
+        name === "NotReadableError" ||
+        name === "AbortError" ||
+        name === "OverconstrainedError"
+      ) {
+        setError(t("record.micBusyError"));
+      } else {
+        setError(t("record.unsupportedError"));
+      }
     }
   }, [t]);
 
@@ -108,6 +157,10 @@ export default function VoiceRecorder() {
       streamRef.current.getTracks().forEach((tr) => tr.stop());
       streamRef.current = null;
     }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
     mediaRecorderRef.current = null;
 
     if (audioBlob.size < 1000) {
@@ -119,7 +172,7 @@ export default function VoiceRecorder() {
     setState("transcribing");
     try {
       const formData = new FormData();
-      formData.append("audio", audioBlob, "recording.webm");
+      formData.append("audio", audioBlob, `recording.${extensionForMimeType(audioBlob.type)}`);
 
       const transcribeRes = await fetch("/api/transcribe", {
         method: "POST",
@@ -250,12 +303,12 @@ export default function VoiceRecorder() {
             <summary className="cursor-pointer hover:text-gray-300">{t("record.showOriginal")}</summary>
             <p className="mt-2 whitespace-pre-wrap">{transcription}</p>
           </details>
-          <a
+          <Link
             href="/"
             className="block text-center bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-lg transition-colors"
           >
             {t("record.backToGraph")}
-          </a>
+          </Link>
         </div>
       )}
     </div>

@@ -18,15 +18,16 @@ const CLEANUP_PROMPT = `以下の音声書き起こしテキストを修正し�
 テキスト:
 `;
 
-async function groqTranscribe(audioBuffer: Buffer, mimeType: string): Promise<string> {
+async function groqTranscribe(audioBuffer: Buffer, mimeType: string, fileName: string): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY not set");
 
   const groq = new Groq({ apiKey });
 
   // Convert Buffer to File-like object for Groq SDK
+  // Groqは拡張子でフォーマット判定するため、実際のコンテナ（webm/mp4）に合わせたファイル名を渡す
   const uint8 = new Uint8Array(audioBuffer);
-  const file = new File([uint8], "recording.webm", { type: mimeType });
+  const file = new File([uint8], fileName, { type: mimeType });
 
   const result = await groq.audio.transcriptions.create({
     file,
@@ -77,12 +78,13 @@ export async function POST(request: NextRequest) {
 
     const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
     const mimeType = audioFile.type || "audio/webm;codecs=opus";
+    const fileName = audioFile.name || (mimeType.includes("mp4") ? "recording.mp4" : "recording.webm");
 
-    console.log("Transcribe: audio size =", audioBuffer.length, "bytes, type =", mimeType);
+    console.log("Transcribe: audio size =", audioBuffer.length, "bytes, type =", mimeType, "name =", fileName);
 
     // Step 1: Groq Whisper transcription (fast & accurate)
     const t0 = Date.now();
-    const rawText = await groqTranscribe(audioBuffer, mimeType);
+    const rawText = await groqTranscribe(audioBuffer, mimeType, fileName);
     console.log(`Groq Whisper: ${Date.now() - t0}ms -> "${rawText.slice(0, 100)}..."`);
 
     if (!rawText) {

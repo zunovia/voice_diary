@@ -8,8 +8,9 @@ Next.js 16 + Supabase + Gemini API + D3.js + shadcn/ui (base-ui)
 
 ## 技術スタック
 - **Next.js 16** (App Router, Turbopack) — params/searchParamsは必ずawaitする
-- **Supabase** — PostgreSQL + pgvector, RLSは全許可（anon keyで操作可能）
-- **Gemini 2.5 Flash** — 音声認識（Web Speech API）+ 要約 + Embedding
+- **Supabase** — PostgreSQL + pgvector。RLS有効・ポリシーなし（=anon keyでは操作不可）。DBアクセスは全てサーバー側の service role key 経由
+- **録音・文字起こし** — ブラウザの MediaRecorder（webm/opus、iOSは audio/mp4 フォールバック）→ /api/transcribe → Groq Whisper large-v3-turbo（Gemini直接文字起こしフォールバック付き）
+- **Gemini 2.5 Flash** — 文字起こし整形 + 要約 + Embedding
 - **Claude API** — 深い分析（インサイトページ）
 - **D3.js** — ナレッジグラフ（Obsidian風）
 - **shadcn/ui (base-ui版)** — UIコンポーネント
@@ -34,9 +35,18 @@ Next.js 16 + Supabase + Gemini API + D3.js + shadcn/ui (base-ui)
 - ライブラリ初期化はモジュールレベルではなく関数内で行う（ビルド時のenv未設定対策）
 
 ### Supabase
-- URL: https://jkcmqxytixtdlipulylk.supabase.co
-- テーブル: memos, insights, api_usage
-- Service Role Keyの代わりにAnon Keyを使用中（RLS全許可のため）
+- URL: https://jkcmqxytixtdlipulylk.supabase.co （⚠️ このプロジェクトは他アプリともテーブル共有: cv_*, ve_*, subscriptions 等が同居）
+- テーブル: memos, insights, api_usage, fusions
+- ⚠️ 本番Vercelの SUPABASE_SERVICE_ROLE_KEY には歴史的経緯で anon key が入っている（2026-07-07確認）。
+  そのため現状は全許可RLSポリシーで動作中。本物の service_role キーに差し替えた後に
+  supabase-migration-2-security.sql を実行してポリシーを削除すること（差し替え前に実行するとアプリが0件を返す）
+- 無料プランは7日間無アクセスで自動休止 → zunovia/voice-diary-backup の GitHub Actions（火木土 6:00 JST）が keep-alive＋自動バックアップを実施
+
+### アクセスキー保護
+- `src/proxy.ts`（Next.js 16では middleware ではなく proxy）が全ページ・全APIを保護
+- Vercel 環境変数 `APP_ACCESS_KEY` を設定すると有効化（未設定ならフェイルオープン=無保護）
+- 認証方法: `/login` でキー入力（Cookie 1年）または `x-api-key` ヘッダー（自動化用）
+- PWA関連アセット（manifest/sw.js/アイコン）と /login は認証不要
 
 ## ディレクトリ構成
 ```
@@ -73,8 +83,8 @@ src/
 
 ## デプロイ
 - GitHub: https://github.com/zunovia/voice_diary
-- ブランチ: main
-- Vercel: 未デプロイ（予定）
+- ブランチ: main（pushでVercelが自動デプロイ）
+- Vercel: デプロイ済み https://voice-diary-mu.vercel.app （project: voice-diary）
 - Git user: zunovia / zunovia@users.noreply.github.com
 
 ## 実装後のテスト・レビュー必須ルール

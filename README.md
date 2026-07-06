@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   <img src="public/logo.png" alt="Voice Diary Memo" width="120" />
 </p>
 
@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fzunovia%2Fvoice_diary&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,GEMINI_API_KEY&envDescription=Supabase%E3%81%A8Gemini%E3%81%AEAPI%E3%82%AD%E3%83%BC%E3%81%8C%E5%BF%85%E8%A6%81%E3%81%A7%E3%81%99&envLink=https%3A%2F%2Fgithub.com%2Fzunovia%2Fvoice_diary%23-%E3%82%BB%E3%83%83%E3%83%88%E3%82%A2%E3%83%83%E3%83%97%E6%89%8B%E9%A0%86&project-name=voice-diary-memo">
+  <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fzunovia%2Fvoice_diary&env=NEXT_PUBLIC_SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,GEMINI_API_KEY,GROQ_API_KEY&envDescription=Supabase%E3%81%A8Gemini%E3%81%AEAPI%E3%82%AD%E3%83%BC%E3%81%8C%E5%BF%85%E8%A6%81%E3%81%A7%E3%81%99&envLink=https%3A%2F%2Fgithub.com%2Fzunovia%2Fvoice_diary%23-%E3%82%BB%E3%83%83%E3%83%88%E3%82%A2%E3%83%83%E3%83%97%E6%89%8B%E9%A0%86&project-name=voice-diary-memo">
     <img src="https://vercel.com/button" alt="Deploy with Vercel" />
   </a>
 </p>
@@ -47,7 +47,6 @@
 5. 「Success」と表示されればOK！
 6. **APIキーを取得**: 左メニュー「Settings」→「API」を開き、以下をメモ:
    - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
-   - `anon public` キー → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `service_role` キー → `SUPABASE_SERVICE_ROLE_KEY`
 
 ### ステップ2: Gemini API キーの取得
@@ -61,7 +60,7 @@
 
 **一番簡単な方法:** 下のボタンをクリック！
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fzunovia%2Fvoice_diary&env=NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,SUPABASE_SERVICE_ROLE_KEY,GEMINI_API_KEY&envDescription=Supabase%E3%81%A8Gemini%E3%81%AEAPI%E3%82%AD%E3%83%BC%E3%81%8C%E5%BF%85%E8%A6%81%E3%81%A7%E3%81%99&envLink=https%3A%2F%2Fgithub.com%2Fzunovia%2Fvoice_diary%23-%E3%82%BB%E3%83%83%E3%83%88%E3%82%A2%E3%83%83%E3%83%97%E6%89%8B%E9%A0%86&project-name=voice-diary-memo)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fzunovia%2Fvoice_diary&env=NEXT_PUBLIC_SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,GEMINI_API_KEY,GROQ_API_KEY&envDescription=Supabase%E3%81%A8Gemini%E3%81%AEAPI%E3%82%AD%E3%83%BC%E3%81%8C%E5%BF%85%E8%A6%81%E3%81%A7%E3%81%99&envLink=https%3A%2F%2Fgithub.com%2Fzunovia%2Fvoice_diary%23-%E3%82%BB%E3%83%83%E3%83%88%E3%82%A2%E3%83%83%E3%83%97%E6%89%8B%E9%A0%86&project-name=voice-diary-memo)
 
 1. Vercelアカウントがなければ作成（GitHubアカウントで登録可能）
 2. 環境変数の入力画面が出るので、ステップ1・2でメモした値を入力:
@@ -69,12 +68,13 @@
    | 変数名 | 入力する値 |
    |--------|-----------|
    | `NEXT_PUBLIC_SUPABASE_URL` | SupabaseのProject URL |
-   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabaseのanon publicキー |
    | `SUPABASE_SERVICE_ROLE_KEY` | Supabaseのservice_roleキー |
    | `GEMINI_API_KEY` | Google AI StudioのAPIキー |
+   | `GROQ_API_KEY` | [console.groq.com/keys](https://console.groq.com/keys) のAPIキー（高精度文字起こし用） |
+   | `APP_ACCESS_KEY` | 任意・推奨: 好きなランダム文字列（32文字以上）。設定するとアプリ全体がこのキーで保護される |
 
 3. 「Deploy」を押して数分待つ
-4. 完了！表示されたURLを開くとアプリが使えます
+4. 完了！表示されたURLを開くとアプリが使えます（`APP_ACCESS_KEY` を設定した場合は初回にキーを入力）
 
 ### ステップ4: スマホで使う
 
@@ -161,8 +161,9 @@ http://localhost:3000 でアクセスできます。
 | [Next.js 16](https://nextjs.org/) | フレームワーク（App Router） |
 | [Supabase](https://supabase.com/) | データベース（PostgreSQL + pgvector） |
 | [Gemini 2.5 Flash](https://ai.google.dev/) | AI要約・分析・Embedding |
+| [Groq Whisper](https://groq.com/) | 高精度文字起こし（whisper-large-v3-turbo） |
 | [D3.js](https://d3js.org/) | ナレッジグラフ可視化 |
-| [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) | ブラウザ音声認識 |
+| [MediaRecorder API](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder) | ブラウザ録音（iOSはaudio/mp4） |
 | [shadcn/ui](https://ui.shadcn.com/) | UIコンポーネント |
 | [Vercel](https://vercel.com/) | ホスティング |
 
@@ -173,7 +174,7 @@ http://localhost:3000 でアクセスできます。
 | 症状 | 対処法 |
 |------|--------|
 | 録音ボタンが動かない | HTTPSが必要です。VercelデプロイURL or `localhost`で使用してください |
-| 文字起こし失敗 | ブラウザがWeb Speech APIに対応しているか確認（Chrome推奨） |
+| 文字起こし失敗 | `GROQ_API_KEY` が設定されているか確認（未設定時はGeminiにフォールバックし遅くなります） |
 | Gemini API 429エラー | 無料枠の制限です。[Google AI Studio](https://aistudio.google.com/)でPay-as-you-goを有効化 |
 | グラフが表示されない | メモが1件以上必要です。まず録音してください |
 | Supabase接続エラー | プロジェクトが一時停止していないか確認（無料プランは7日放置で停止） |
