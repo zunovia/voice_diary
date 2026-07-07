@@ -154,10 +154,10 @@ export default function KnowledgeGraph() {
   ]);
 
   // Rotation (use refs to avoid full re-render on toggle)
-  const [rotationSpeed, setRotationSpeed] = useState(0.25);
+  const [rotationSpeed, setRotationSpeed] = useState(0.45);
   const [isRotating, setIsRotating] = useState(true);
   const isRotatingRef = useRef(true);
-  const rotationSpeedRef = useRef(0.25);
+  const rotationSpeedRef = useRef(0.45);
   useEffect(() => { isRotatingRef.current = isRotating; }, [isRotating]);
   useEffect(() => { rotationSpeedRef.current = rotationSpeed; }, [rotationSpeed]);
 
