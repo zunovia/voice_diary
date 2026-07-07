@@ -24,6 +24,7 @@ type GraphNode = {
   vy?: number;
   fx?: number | null;
   fy?: number | null;
+  _drift?: number; // 無軌道ドリフト(遊泳)用の進行方向(ラジアン)
   connectionCount?: number;
   // Fusion node fields
   isFusion?: boolean;
@@ -153,10 +154,10 @@ export default function KnowledgeGraph() {
   ]);
 
   // Rotation (use refs to avoid full re-render on toggle)
-  const [rotationSpeed, setRotationSpeed] = useState(0.1);
+  const [rotationSpeed, setRotationSpeed] = useState(0.25);
   const [isRotating, setIsRotating] = useState(true);
   const isRotatingRef = useRef(true);
-  const rotationSpeedRef = useRef(0.1);
+  const rotationSpeedRef = useRef(0.25);
   useEffect(() => { isRotatingRef.current = isRotating; }, [isRotating]);
   useEffect(() => { rotationSpeedRef.current = rotationSpeed; }, [rotationSpeed]);
 
@@ -337,7 +338,10 @@ export default function KnowledgeGraph() {
       : [];
     const allForceLinks = [...links, ...insightForceLinks];
 
-    // Simulation
+    // Simulation — Obsidian風の「ゆっくり無軌道に遊泳」する物理。
+    // ・中心へは forceX/forceY で弱く引くだけ（ハードな recenter はしない＝画面全体に広がる）
+    // ・境界は tick 側のソフトな壁＋クランプで画面外へ出さない
+    // ・alphaTarget を少しだけ温め続けて永続的に微動（遊泳の素）。実際の漂いは animateLoop の drift が与える
     const simulation = d3
       .forceSimulation(nodes as d3.SimulationNodeDatum[] as GraphNode[])
       .force(
@@ -348,27 +352,29 @@ export default function KnowledgeGraph() {
           .distance(linkDistance)
           .strength(linkStrength)
       )
-      .force("charge", d3.forceManyBody().strength(-repelStrength * 10))
-      .force("center", d3.forceCenter(width / 2, height / 2).strength(centerStrength))
-      .force("collision", d3.forceCollide().radius((d) => getNodeRadius(d as GraphNode) + 2))
-      .alphaDecay(0.005)
-      .velocityDecay(0.55);
+      .force(
+        "charge",
+        d3
+          .forceManyBody()
+          .strength(-repelStrength * 10)
+          .distanceMax(Math.min(width, height) * 0.7)
+      )
+      .force("x", d3.forceX(width / 2).strength(0.02 * centerStrength))
+      .force("y", d3.forceY(height / 2).strength(0.02 * centerStrength))
+      .force("collision", d3.forceCollide().radius((d) => getNodeRadius(d as GraphNode) + 4))
+      .alphaDecay(0.02)
+      .velocityDecay(0.4)
+      .alphaTarget(0.06);
 
     // If nodes already have positions (e.g. after stopping animation), start with low alpha
     // so they don't jump around - just gently float
     const hasPositions = nodes.some((n) => n.x != null && n.y != null);
     if (hasPositions) {
-      simulation.alpha(0.05);
+      simulation.alpha(0.1);
     }
 
     // Keep simulation always alive (Obsidian-like constant micro-movement)
     simulation.alphaMin(0);
-    // Periodically reheat to keep nodes gently floating
-    const reheatInterval = setInterval(() => {
-      if (simulation.alpha() < 0.02) {
-        simulation.alpha(0.02).restart();
-      }
-    }, 2000);
 
     simulationRef.current = simulation as unknown as d3.Simulation<GraphNode, GraphLink>;
 
@@ -628,7 +634,7 @@ export default function KnowledgeGraph() {
         }
       })
       .on("end", (event, d) => {
-        if (!event.active) simulation.alphaTarget(0.05);
+        if (!event.active) simulation.alphaTarget(0.06);
 
         fusionZone.attr("opacity", 0);
         node.attr("stroke", "transparent");
@@ -814,9 +820,8 @@ export default function KnowledgeGraph() {
       requestAnimationFrame(pulseAnimate);
     }
 
-    // Animate dash offset for flowing effect + slow rotation
+    // Animate dash offset for flowing effect + aimless drift (遊泳)
     let dashOffset = 0;
-    let rotAngle = 0;
     let animRunning = true;
 
     const animateLoop = () => {
@@ -826,29 +831,22 @@ export default function KnowledgeGraph() {
       dashOffset -= 0.5;
       insightLine.attr("stroke-dashoffset", dashOffset);
 
-      // Slow rotation: apply gentle orbital force to all nodes
+      // Aimless drift（Obsidian風の「ゆっくり無軌道に遊泳」）:
+      // 各ノードにゆっくり向きの変わる進行方向(_drift)を持たせ、その向きへ
+      // 微小な力を与え続ける。軌道回転ではなく、当てもなく漂う動き。
       if (isRotatingRef.current && rotationSpeedRef.current > 0) {
-        const cx = width / 2;
-        const cy = height / 2;
-        const speed = rotationSpeedRef.current;
-        rotAngle += speed * 0.01;
-
+        const drift = rotationSpeedRef.current * 0.6;
         nodes.forEach((n) => {
-          if (n.fx !== null && n.fx !== undefined) return; // skip pinned nodes
-          const dx = (n.x || cx) - cx;
-          const dy = (n.y || cy) - cy;
-          const cos = Math.cos(speed * 0.002);
-          const sin = Math.sin(speed * 0.002);
-          const nx = dx * cos - dy * sin + cx;
-          const ny = dx * sin + dy * cos + cy;
-          // Gently nudge toward rotated position
-          n.vx = ((n.vx || 0) + (nx - (n.x || cx)) * 0.02);
-          n.vy = ((n.vy || 0) + (ny - (n.y || cy)) * 0.02);
+          if (n.fx != null) return; // skip pinned nodes
+          n._drift =
+            (n._drift ?? Math.random() * Math.PI * 2) + (Math.random() - 0.5) * 0.3;
+          n.vx = (n.vx || 0) + Math.cos(n._drift) * drift;
+          n.vy = (n.vy || 0) + Math.sin(n._drift) * drift;
         });
 
-        // Keep simulation alive for rotation
+        // Keep simulation gently alive
         if (simulation.alpha() < 0.05) {
-          simulation.alpha(0.05).restart();
+          simulation.alpha(0.06).restart();
         }
       }
 
@@ -858,22 +856,19 @@ export default function KnowledgeGraph() {
 
     // Tick
     simulation.on("tick", () => {
-      // Boundary constraint: keep nodes in a soft zone around center
-      // Nodes that drift too far get gently pulled back
-      const cx = width / 2;
-      const cy = height / 2;
-      const maxRadius = Math.min(width, height) * 0.4; // 40% of the smaller dimension
+      // Boundary: 画面全体を使いつつ、端に近づくとやんわり押し戻し、
+      // 最後にハードクランプで絶対に画面外へ出さない（Obsidian風の"画面内で遊泳"）。
+      const margin = 26;
       nodes.forEach((d) => {
         if (d.fx != null) return; // skip pinned nodes
-        const dx = (d.x || cx) - cx;
-        const dy = (d.y || cy) - cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > maxRadius) {
-          // Soft pull toward center (stronger the further out)
-          const pull = (dist - maxRadius) / dist * 0.3;
-          d.x = (d.x || cx) - dx * pull;
-          d.y = (d.y || cy) - dy * pull;
-        }
+        if (d.x == null || d.y == null) return;
+        if (d.x < margin) d.vx = (d.vx || 0) + (margin - d.x) * 0.03;
+        else if (d.x > width - margin) d.vx = (d.vx || 0) - (d.x - (width - margin)) * 0.03;
+        if (d.y < margin) d.vy = (d.vy || 0) + (margin - d.y) * 0.03;
+        else if (d.y > height - margin) d.vy = (d.vy || 0) - (d.y - (height - margin)) * 0.03;
+        // hard clamp — 画面外へは出さない
+        d.x = Math.max(8, Math.min(width - 8, d.x));
+        d.y = Math.max(8, Math.min(height - 8, d.y));
       });
 
       link
@@ -921,7 +916,6 @@ export default function KnowledgeGraph() {
     return () => {
       simulation.stop();
       animRunning = false;
-      clearInterval(reheatInterval);
     };
   }, [
     filteredData,

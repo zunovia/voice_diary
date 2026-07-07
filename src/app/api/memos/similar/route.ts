@@ -1,5 +1,9 @@
 import { createServerClient } from "@/lib/supabase";
 
+// 各ノードが持つ類似リンクの上限。全ペア(>0.5)をそのまま繋ぐと毛玉化するため、
+// 各ノードの「最も近い上位K本」だけ残して Obsidian 風のまばらな星座にする。
+const TOP_K = 4;
+
 export async function GET() {
   try {
     const supabase = createServerClient();
@@ -139,13 +143,39 @@ export async function GET() {
     }
 
     const allNodes = [...nodes, ...fusionNodes];
-    const allLinks = [...links, ...fusionLinks];
+    // cosine類似リンクは各ノード上位K本だけ残して間引く（毛玉回避）。
+    // fusionの親リンク(明示的な繋がり)は常に維持する。
+    const allLinks = [...topKPerNode(links, TOP_K), ...fusionLinks];
 
     return Response.json({ nodes: allNodes, links: allLinks, insightLinks });
   } catch (error) {
     console.error("Similar memos error:", error);
     return Response.json({ error: "Internal error" }, { status: 500 });
   }
+}
+
+// 各ノードの類似リンクを上位K本に間引く。あるリンクは、両端のどちらかの
+// 上位Kに入っていれば残す（相互最近傍寄りの、連結を保ったまばらなグラフになる）。
+function topKPerNode(
+  links: Array<{ source: string; target: string; similarity: number }>,
+  k: number
+): Array<{ source: string; target: string; similarity: number }> {
+  const byNode = new Map<
+    string,
+    Array<{ source: string; target: string; similarity: number }>
+  >();
+  for (const l of links) {
+    if (!byNode.has(l.source)) byNode.set(l.source, []);
+    if (!byNode.has(l.target)) byNode.set(l.target, []);
+    byNode.get(l.source)!.push(l);
+    byNode.get(l.target)!.push(l);
+  }
+  const keep = new Set<(typeof links)[number]>();
+  for (const arr of byNode.values()) {
+    arr.sort((a, b) => b.similarity - a.similarity);
+    for (const l of arr.slice(0, k)) keep.add(l);
+  }
+  return links.filter((l) => keep.has(l));
 }
 
 // pgvector の値は supabase-js だと文字列 "[0.1,0.2,...]" で返ることがあるため、
