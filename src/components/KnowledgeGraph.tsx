@@ -75,9 +75,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const DEFAULT_FORCES = {
   centerStrength: 1.2,
-  repelStrength: 6,
-  linkStrength: 0.44,
-  linkDistance: 120,
+  repelStrength: 11, // ノード同士を広げて文字が読める余白を作る（旧6は密集しがち）
+  linkStrength: 0.4,
+  linkDistance: 150,
 };
 
 const DEFAULT_DISPLAY = {
@@ -361,7 +361,15 @@ export default function KnowledgeGraph() {
       )
       .force("x", d3.forceX(width / 2).strength(0.02 * centerStrength))
       .force("y", d3.forceY(height / 2).strength(0.02 * centerStrength))
-      .force("collision", d3.forceCollide().radius((d) => getNodeRadius(d as GraphNode) + 4))
+      .force(
+        "collision",
+        d3
+          .forceCollide()
+          // ラベル(ノードの下に出る文字)ぶんの余白を衝突半径に含めて、文字が重ならない間隔を確保する
+          .radius((d) => getNodeRadius(d as GraphNode) + (labelSize > 0 ? labelSize * 1.8 + 10 : 6))
+          .strength(1)
+          .iterations(2)
+      )
       .alphaDecay(0.02)
       .velocityDecay(0.4)
       .alphaTarget(0.06);
