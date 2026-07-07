@@ -37,9 +37,9 @@ Next.js 16 + Supabase + Gemini API + D3.js + shadcn/ui (base-ui)
 ### Supabase
 - URL: https://jkcmqxytixtdlipulylk.supabase.co （⚠️ このプロジェクトは他アプリともテーブル共有: cv_*, ve_*, subscriptions 等が同居）
 - テーブル: memos, insights, api_usage, fusions
-- ⚠️ 本番Vercelの SUPABASE_SERVICE_ROLE_KEY には歴史的経緯で anon key が入っている（2026-07-07確認）。
-  そのため現状は全許可RLSポリシーで動作中。本物の service_role キーに差し替えた後に
-  supabase-migration-2-security.sql を実行してポリシーを削除すること（差し替え前に実行するとアプリが0件を返す）
+- ✅ RLS強化完了（2026-07-07）: SUPABASE_SERVICE_ROLE_KEY を本物の service_role キーに差し替え済み（ユーザーが実施）→ supabase-migration-2-security.sql 適用済み（4テーブルの「全許可」ポリシー削除・RLSは有効維持）。
+  アプリは service_role でRLSをバイパスして全件アクセス可、anon key での直REST（SELECT/INSERT）は遮断済みを実測確認。以後この4テーブルに anon 用ポリシーを足さないこと（穴が再び開く）
+- ⚠️ 過去の教訓: 以前は SERVICE_ROLE_KEY に anon key が入っていた。差し替え前にポリシーを消すとアプリが全件0件になる（2026-07-07に一度発生→ロールバック→鍵差し替え後に再実行で解決）
 - 無料プランは7日間無アクセスで自動休止 → zunovia/voice-diary-backup の GitHub Actions（火木土 6:00 JST）が keep-alive＋自動バックアップを実施
 
 ### アクセスキー保護

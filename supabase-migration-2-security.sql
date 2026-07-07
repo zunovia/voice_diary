@@ -1,6 +1,10 @@
 -- ============================================
 -- Voice Diary Memo - セキュリティマイグレーション
 -- ============================================
+-- ✅ 適用済み 2026-07-07（本番 jkcmqxytixtdlipulylk / Supabase migration: drop_allow_all_policies_voicediary）。
+--    service_roleキー差し替え→カナリア(api_usage)で service_role 動作を実測確認→全4テーブル削除→
+--    anon直RESTのSELECT=[] / INSERT=401 を実測確認済み。以後の再実行は不要（冪等なので再実行しても無害）。
+-- ============================================
 -- 旧バージョンの supabase-setup.sql が作成していた「全操作許可」の
 -- RLSポリシーを削除する。
 --
