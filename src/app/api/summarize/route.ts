@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServerClient } from "@/lib/supabase";
-import { summarizeAndTag } from "@/lib/gemini";
+import { summarizeAndTag, generateEmbedding } from "@/lib/gemini";
 import { trackUsage, estimateTokens } from "@/lib/usage-tracker";
 
 export async function POST(request: NextRequest) {
@@ -33,6 +33,19 @@ export async function POST(request: NextRequest) {
       endpoint: "summarize",
     });
 
+    // Step 1b: Embedding for semantic search / graph (best-effort).
+    // 生成に失敗してもメモ保存は継続する。取りこぼしは backfill ジョブが後で回収するため、
+    // ここで例外を投げて保存を止めることはしない（= embedding 未設定バグの根本修正）。
+    let embedding: number[] | null = null;
+    try {
+      embedding = await generateEmbedding(text);
+    } catch (err) {
+      console.error(
+        "Embedding generation failed (memo will be saved without embedding; backfill will recover):",
+        err
+      );
+    }
+
     // Step 2: Save to Supabase
     const supabase = createServerClient();
     const { data, error } = await supabase
@@ -43,6 +56,7 @@ export async function POST(request: NextRequest) {
         summary: analysis.summary,
         tags: analysis.tags,
         category: analysis.category,
+        ...(embedding ? { embedding } : {}),
       })
       .select()
       .single();

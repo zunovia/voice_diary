@@ -36,13 +36,17 @@ export async function GET() {
       similarity: number;
     }> = [];
 
-    const memosWithEmbedding = memos.filter((m) => m.embedding);
+    // pgvector の embedding は supabase-js 経由だと文字列("[0.1,0.2,...]")で返るため、
+    // number[] にパースしてから cosine を計算する（これが無いと類似リンクが0本になる）。
+    const memosWithEmbedding = memos
+      .map((m) => ({ id: m.id, vec: toVector(m.embedding) }))
+      .filter((m): m is { id: string; vec: number[] } => m.vec !== null);
 
     for (let i = 0; i < memosWithEmbedding.length; i++) {
       for (let j = i + 1; j < memosWithEmbedding.length; j++) {
         const sim = cosineSimilarity(
-          memosWithEmbedding[i].embedding,
-          memosWithEmbedding[j].embedding
+          memosWithEmbedding[i].vec,
+          memosWithEmbedding[j].vec
         );
         if (sim > 0.5) {
           links.push({
@@ -121,11 +125,13 @@ export async function GET() {
     }
 
     // Compute similarity links between fusions and memos
-    const fusionsWithEmbedding = (fusions || []).filter((f) => f.embedding);
+    const fusionsWithEmbedding = (fusions || [])
+      .map((f) => ({ id: f.id, parent_memo_ids: f.parent_memo_ids, vec: toVector(f.embedding) }))
+      .filter((f): f is { id: string; parent_memo_ids: string[] | null; vec: number[] } => f.vec !== null);
     for (const f of fusionsWithEmbedding) {
       for (const m of memosWithEmbedding) {
         if ((f.parent_memo_ids || []).includes(m.id)) continue; // skip parent links (already added)
-        const sim = cosineSimilarity(f.embedding, m.embedding);
+        const sim = cosineSimilarity(f.vec, m.vec);
         if (sim > 0.5) {
           links.push({ source: f.id, target: m.id, similarity: Math.round(sim * 1000) / 1000 });
         }
@@ -140,6 +146,22 @@ export async function GET() {
     console.error("Similar memos error:", error);
     return Response.json({ error: "Internal error" }, { status: 500 });
   }
+}
+
+// pgvector の値は supabase-js だと文字列 "[0.1,0.2,...]" で返ることがあるため、
+// number[] に正規化する。既に配列ならそのまま返す。
+function toVector(v: unknown): number[] | null {
+  if (!v) return null;
+  if (Array.isArray(v)) return v as number[];
+  if (typeof v === "string") {
+    try {
+      const arr = JSON.parse(v);
+      return Array.isArray(arr) ? (arr as number[]) : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
